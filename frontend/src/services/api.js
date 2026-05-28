@@ -202,9 +202,11 @@ export const api = {
     request('POST', `/campaigns/${campaignId}/updates`, body, token),
 
   getContributions: (campaignId) => request('GET', `/contributions/campaign/${campaignId}`),
-  getMilestones: (campaignId) => request('GET', `/milestones/campaign/${campaignId}`),
+  getMilestones: (campaignId) => request('GET', `/campaigns/${campaignId}/milestones`),
+  setCampaignMilestones: (campaignId, milestones, token) =>
+    request('POST', `/campaigns/${campaignId}/milestones`, { milestones }, token),
   submitMilestoneEvidence: (id, body, token) => request('POST', `/milestones/${id}/submit`, body, token),
-  approveMilestone: (id, body, token) => request('POST', `/milestones/${id}/approve`, body || {}, token),
+  approveMilestone: (id, body, token) => request('POST', `/milestones/${id}/release`, body || {}, token),
   rejectMilestone: (id, body, token) => request('POST', `/milestones/${id}/reject`, body || {}, token),
   contribute: (body, token) => request('POST', '/contributions', body, token),
   prepareContribution: (body, token) => request('POST', '/contributions/prepare', body, token),

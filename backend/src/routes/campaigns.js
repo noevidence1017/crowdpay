@@ -92,6 +92,7 @@ const upload = multer({
 
 const SUPPORTED_ASSETS = getSupportedAssetCodes();
 const MILESTONE_PERCENT_SCALE = 10000;
+const MILESTONE_LIMIT = 5;
 
 function normalizeMilestonesInput(input) {
   if (input == null) return [];
@@ -99,14 +100,18 @@ function normalizeMilestonesInput(input) {
     throw new Error('milestones must be an array');
   }
   if (input.length === 0) return [];
-  if (input.length > 10) {
-    throw new Error('Campaigns can define at most 10 milestones');
+  if (input.length > MILESTONE_LIMIT) {
+    throw new Error(`Campaigns can define at most ${MILESTONE_LIMIT} milestones`);
   }
 
   const normalized = input.map((milestone, index) => {
     const title = String(milestone?.title || '').trim();
+    const description = String(milestone?.description || '').trim();
     if (!title) {
       throw new Error(`Milestone ${index + 1} title is required`);
+    }
+    if (!description) {
+      throw new Error(`Milestone ${index + 1} description is required`);
     }
 
     const releasePercentage = Number(milestone?.release_percentage);
@@ -116,7 +121,7 @@ function normalizeMilestonesInput(input) {
 
     return {
       title,
-      description: String(milestone?.description || '').trim() || null,
+      description,
       release_percentage: releasePercentage.toFixed(4),
       release_percentage_units: Math.round(releasePercentage * MILESTONE_PERCENT_SCALE),
       sort_order: index,
@@ -234,6 +239,89 @@ router.get('/', getCampaignsValidation, validateRequest, async (req, res) => {
   const result = await db.query(query, [...params, limit, offset]);
 
   res.json({ total, limit, offset, campaigns: result.rows });
+});
+
+router.get('/:id/milestones', async (req, res) => {
+  const { rows } = await db.query(
+    `SELECT m.*, (c.milestones_contract_id IS NOT NULL) AS on_chain
+     FROM milestones m
+     JOIN campaigns c ON c.id = m.campaign_id
+     WHERE m.campaign_id = $1
+     ORDER BY m.sort_order ASC, m.created_at ASC`,
+    [req.params.id]
+  );
+  res.json(rows);
+});
+
+router.post('/:id/milestones', requireAuth, requireCampaignMember('owner'), async (req, res) => {
+  let normalizedMilestones;
+  try {
+    normalizedMilestones = normalizeMilestonesInput(req.body?.milestones);
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+
+  if (!normalizedMilestones.length) {
+    return res.status(400).json({ error: 'At least one milestone is required' });
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: campaignRows } = await client.query(
+      'SELECT id, creator_id, status FROM campaigns WHERE id = $1 FOR UPDATE',
+      [req.params.id]
+    );
+    if (!campaignRows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Campaign not found' });
+    }
+    const campaign = campaignRows[0];
+    if (campaign.creator_id !== req.user.userId) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'Only the campaign creator can define milestones' });
+    }
+    if (!['active', 'funded', 'in_progress'].includes(campaign.status)) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: `Milestones cannot be edited while campaign status is "${campaign.status}".` });
+    }
+
+    const { rows: existingRows } = await client.query(
+      'SELECT status FROM milestones WHERE campaign_id = $1',
+      [campaign.id]
+    );
+    if (existingRows.some((row) => row.status !== 'pending')) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Milestone plan cannot be changed after approvals or releases begin' });
+    }
+
+    await client.query('DELETE FROM milestones WHERE campaign_id = $1', [campaign.id]);
+    const inserted = [];
+    for (const milestone of normalizedMilestones) {
+      const { rows } = await client.query(
+        `INSERT INTO milestones
+           (campaign_id, title, description, release_percentage, sort_order)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING *`,
+        [
+          campaign.id,
+          milestone.title,
+          milestone.description,
+          milestone.release_percentage,
+          milestone.sort_order,
+        ]
+      );
+      inserted.push(rows[0]);
+    }
+    await client.query('COMMIT');
+    res.status(201).json(inserted);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    logger.error('Campaign milestone plan update failed', { campaign_id: req.params.id, error: err.message });
+    res.status(500).json({ error: 'Could not save campaign milestones' });
+  } finally {
+    client.release();
+  }
 });
 
 // Get single Campaign

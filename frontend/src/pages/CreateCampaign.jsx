@@ -109,7 +109,7 @@ export default function CreateCampaign() {
 
   function addMilestone() {
     setForm((f) => {
-      if (f.milestones.length >= 10) return f;
+      if (f.milestones.length >= 5) return f;
       return { ...f, milestones: [...f.milestones, emptyMilestone()] };
     });
   }
@@ -157,8 +157,8 @@ export default function CreateCampaign() {
       setError('');
       return true;
     }
-    if (form.milestones.length > 10) {
-      setError('Campaigns can define at most 10 milestones.');
+    if (form.milestones.length > 5) {
+      setError('Campaigns can define at most 5 milestones.');
       return false;
     }
 
@@ -534,7 +534,7 @@ export default function CreateCampaign() {
                 </span>
               </div>
               <p style={{ color: '#555', fontSize: '0.88rem', lineHeight: 1.5 }}>
-                Milestones are optional. If you add them, define between 1 and 10 release checkpoints and make sure the
+                Milestones are optional. If you add them, define between 1 and 5 release checkpoints and make sure the
                 percentages sum to exactly 100.
               </p>
             </div>
@@ -587,7 +587,7 @@ export default function CreateCampaign() {
               </div>
             )}
 
-            {form.milestones.length < 10 && (
+            {form.milestones.length < 5 && (
               <button type="button" className="btn-secondary" style={{ width: '100%', marginTop: '1rem' }} onClick={addMilestone}>
                 + Add milestone
               </button>

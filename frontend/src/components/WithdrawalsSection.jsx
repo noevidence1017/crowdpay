@@ -25,6 +25,7 @@ export default function WithdrawalsSection({ campaign, milestones = [], user, to
   const [busyId, setBusyId] = useState(null);
   const [eventsById, setEventsById] = useState({});
   const [openAudit, setOpenAudit] = useState(null);
+  const [milestoneForms, setMilestoneForms] = useState({});
 
   const isCreator = user?.id && campaign.creator_id === user.id;
   const isAdmin = user?.role === 'admin';
@@ -33,6 +34,24 @@ export default function WithdrawalsSection({ campaign, milestones = [], user, to
   const hasPending = rows.some((r) => r.status === 'pending');
   const canOpenRequest =
     isCreator && !hasMilestonePlan && ELIGIBLE.includes(campaign.status) && !hasPending;
+  const pendingMilestones = milestones.filter((milestone) => milestone.status !== 'released');
+
+  useEffect(() => {
+    setMilestoneForms((current) => {
+      const next = { ...current };
+      let changed = false;
+      for (const milestone of pendingMilestones) {
+        if (!next[milestone.id]) {
+          next[milestone.id] = {
+            evidence_url: milestone.evidence_url || '',
+            destination_key: milestone.destination_key || '',
+          };
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [pendingMilestones]);
 
   const refresh = useCallback(async () => {
     if (!token) return;
@@ -119,6 +138,41 @@ export default function WithdrawalsSection({ campaign, milestones = [], user, to
     }
   }
 
+  function setMilestoneField(milestoneId, field, value) {
+    setMilestoneForms((current) => ({
+      ...current,
+      [milestoneId]: {
+        ...(current[milestoneId] || {}),
+        [field]: value,
+      },
+    }));
+  }
+
+  async function requestMilestoneRelease(milestoneId) {
+    const payload = milestoneForms[milestoneId] || {};
+    if (!payload.evidence_url?.trim() || !payload.destination_key?.trim()) {
+      setError('Milestone evidence and payout destination are both required.');
+      return;
+    }
+    setBusyId(`milestone-${milestoneId}`);
+    setError('');
+    try {
+      await api.submitMilestoneEvidence(
+        milestoneId,
+        {
+          evidence_url: payload.evidence_url.trim(),
+          destination_key: payload.destination_key.trim(),
+        },
+        token
+      );
+      onReleased?.();
+    } catch (err) {
+      setError(err.message || 'Milestone release request failed.');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   if (!token || forbidden) return null;
   if (loading) {
     return (
@@ -142,6 +196,53 @@ export default function WithdrawalsSection({ campaign, milestones = [], user, to
         <p className="alert alert--info" role="status">
           This campaign uses milestone-based releases. Manual one-shot withdrawal requests are disabled; approvals happen through milestone review.
         </p>
+      )}
+
+      {hasMilestonePlan && isCreator && (
+        <div style={{ display: 'grid', gap: '0.75rem', marginBottom: '1rem' }}>
+          {pendingMilestones.map((milestone) => (
+            <div key={milestone.id} style={styles.card}>
+              <h3 style={styles.h3}>Request milestone release</h3>
+              <p style={styles.hint}>
+                {milestone.title} · {Number(milestone.release_percentage).toLocaleString()}% of raised funds
+              </p>
+              {milestone.review_note && (
+                <div className="alert alert--info" style={{ marginBottom: '0.55rem' }}>
+                  {milestone.review_note}
+                </div>
+              )}
+              <label className="label-strong" htmlFor={`milestone-evidence-${milestone.id}`}>
+                Evidence URL
+              </label>
+              <input
+                id={`milestone-evidence-${milestone.id}`}
+                value={milestoneForms[milestone.id]?.evidence_url || ''}
+                onChange={(e) => setMilestoneField(milestone.id, 'evidence_url', e.target.value)}
+                placeholder="https://"
+                style={{ marginBottom: '0.65rem' }}
+              />
+              <label className="label-strong" htmlFor={`milestone-destination-${milestone.id}`}>
+                Destination address
+              </label>
+              <input
+                id={`milestone-destination-${milestone.id}`}
+                value={milestoneForms[milestone.id]?.destination_key || ''}
+                onChange={(e) => setMilestoneField(milestone.id, 'destination_key', e.target.value)}
+                placeholder="G..."
+                style={{ marginBottom: '0.65rem' }}
+              />
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={busyId === `milestone-${milestone.id}` || milestone.status === 'released'}
+                onClick={() => requestMilestoneRelease(milestone.id)}
+                style={{ width: '100%' }}
+              >
+                {busyId === `milestone-${milestone.id}` ? 'Submitting…' : 'Request milestone release'}
+              </button>
+            </div>
+          ))}
+        </div>
       )}
 
       {!ELIGIBLE.includes(campaign.status) && (
