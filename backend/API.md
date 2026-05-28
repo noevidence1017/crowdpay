@@ -16,7 +16,21 @@ In development, browse the interactive API docs at `GET /api/docs`.
 
 ### `GET /api/users/me`
 
-Authenticated. Returns the current profile, including `kyc_status` (`unverified`, `pending`, `verified`, `rejected`) and `kyc_completed_at`.
+Authenticated. Returns the current profile, including `email_verified` (boolean), `kyc_status` (`unverified`, `pending`, `verified`, `rejected`) and `kyc_completed_at`.
+
+### `GET /api/users/verify-email`
+
+Public. Validates a verification token and marks the associated user's email as verified.
+
+Query params:
+- `token` (required): The UUID token sent via email.
+
+Returns `200` on success or `400/410` if the token is invalid or expired (> 24 hours).
+
+### `POST /api/users/resend-verification`
+
+Authenticated. Generates a new verification token and sends a new email.
+Rate-limited to 3 requests per hour per user.
 
 ### `POST /api/users/me/kyc/start`
 
@@ -30,7 +44,7 @@ KYC provider callback. Updates the matched user to `verified` or `rejected` from
 
 ### `POST /api/campaigns`
 
-Authenticated creator/admin endpoint. When `KYC_REQUIRED_FOR_CAMPAIGNS` is not `false`, the user must have `kyc_status=verified`; otherwise the API returns `403` with `code=KYC_REQUIRED`.
+Authenticated creator/admin endpoint. The user must have `email_verified=true`. Additionally, when `KYC_REQUIRED_FOR_CAMPAIGNS` is not `false`, the user must have `kyc_status=verified`; otherwise the API returns `403` with `code=KYC_REQUIRED` or `code=EMAIL_NOT_VERIFIED`.
 
 ### `GET /api/contributions/quote`
 

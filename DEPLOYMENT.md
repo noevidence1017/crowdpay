@@ -106,6 +106,7 @@ Fork `Savitura/crowdpay` on GitHub so Railway can pull from your account.
    | `WALLET_SECRET_PROVIDER` | `local` |
    | `WALLET_SECRET_LOCAL_KEK` | The random base64 KEK you generated |
    | `USDC_ISSUER` | Testnet: `GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5` |
+| `APP_URL` | Your frontend/backend base URL (e.g. `https://crowdpay.up.railway.app`) |
    | `FRONTEND_URL` | Your Railway app URL (set after first deploy, e.g. `https://crowdpay.up.railway.app`) |
    | `SERVE_FRONTEND` | `true` |
    | `PORT` | `3001` |
@@ -181,6 +182,7 @@ Render runs the app as a single Web Service with a managed PostgreSQL instance. 
    | `WALLET_SECRET_PROVIDER` | `local` |
    | `WALLET_SECRET_LOCAL_KEK` | The random base64 KEK you generated |
    | `USDC_ISSUER` | Testnet: `GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5` |
+| `APP_URL` | Your Render service URL (e.g. `https://crowdpay.onrender.com`) |
    | `FRONTEND_URL` | Your Render service URL (e.g. `https://crowdpay.onrender.com`) |
    | `SERVE_FRONTEND` | `true` |
    | `VITE_STELLAR_NETWORK` | `testnet` or `public` (used during the frontend build step) |
@@ -529,6 +531,7 @@ All variables go in `backend/.env` (or the equivalent dashboard UI for Railway/R
 | `SMTP_PORT` | No | SMTP port | `587` |
 | `SMTP_USER` | No | SMTP username | `apikey` |
 | `SMTP_PASS` | No | SMTP password or API key | `SG.abc...` |
+| `APP_URL` | Yes | Base URL used for email verification links | `https://api.yourdomain.com` |
 | `EMAIL_SERVICE_API_KEY` | No | Provider-level API key (SendGrid / Mailgun) | `SG.abc...` |
 
 ### Alerting
