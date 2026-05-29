@@ -29,6 +29,12 @@ function validateEnv() {
     process.stderr.write(`\n[crowdpay] Cannot start: ${err.message}\n\n`);
     process.exit(1);
   }
+
+  if (!process.env.PLATFORM_APPROVER_USER_ID) {
+    process.stderr.write(
+      '\n[crowdpay] WARNING: PLATFORM_APPROVER_USER_ID not set — platform approval actions are denied.\n\n'
+    );
+  }
 }
 
 module.exports = { validateEnv };

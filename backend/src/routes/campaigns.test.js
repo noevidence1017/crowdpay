@@ -148,6 +148,33 @@ test('POST /api/campaigns allows creation when KYC gate is disabled', async (t) 
   assert.equal(response.body.id, 'campaign-1');
 });
 
+test('POST /api/campaigns returns 500 and logs orphaned wallet when DB insert fails', async () => {
+  process.env.KYC_REQUIRED_FOR_CAMPAIGNS = 'false';
+  const app = buildApp({
+    authUser: { userId: 'creator-1', role: 'creator' },
+    queryImpl: async (text) => {
+      if (text.includes('SELECT email, wallet_public_key, kyc_status FROM users')) {
+        return { rows: [{ email: 'creator@test.com', wallet_public_key: 'GCREATOR', kyc_status: 'verified' }] };
+      }
+      if (text === 'BEGIN' || text === 'ROLLBACK') return { rows: [] };
+      if (text.includes('INSERT INTO campaigns')) {
+        throw new Error('unique constraint violation');
+      }
+      return { rows: [] };
+    },
+    buildWithdrawalTransactionImpl: async () => '',
+    insertWithdrawalPendingSignaturesImpl: async () => 'tx-row',
+  });
+
+  const response = await request(app)
+    .post('/api/campaigns')
+    .set('Authorization', 'Bearer token')
+    .send({ title: 'Broken campaign', target_amount: '100', asset_type: 'USDC' });
+
+  assert.equal(response.status, 500);
+  assert.match(response.body.error, /contact support/i);
+});
+
 test('POST /api/campaigns returns 400 with validation errors for invalid payload', async () => {
   process.env.KYC_REQUIRED_FOR_CAMPAIGNS = 'false';
   const app = buildApp({

@@ -1,7 +1,7 @@
 const router = require('express').Router();
 const db = require('../config/database');
 const logger = require('../config/logger');
-const { requireAuth, requireRole } = require('../middleware/auth');
+const { requireAuth } = require('../middleware/auth');
 const { sendAlert } = require('../services/alerting');
 const { withdrawalValidation, validateRequest } = require('../middleware/validation');
 const {
@@ -22,6 +22,19 @@ const { emitWebhookEventForUser, WEBHOOK_EVENTS } = require('../services/webhook
 const { withDecryptedWalletSecret } = require('../services/walletSecrets');
 
 const ALLOWED_CAMPAIGN_STATUS_FOR_REQUEST = ['active', 'funded'];
+
+/** Fail closed when PLATFORM_APPROVER_USER_ID is unset. */
+function canPerformPlatformSignature(userId) {
+  if (!process.env.PLATFORM_APPROVER_USER_ID) return false;
+  return userId === process.env.PLATFORM_APPROVER_USER_ID;
+}
+
+function requirePlatformApprover(req, res, next) {
+  if (!canPerformPlatformSignature(req.user.userId)) {
+    return res.status(403).json({ error: 'Only the designated platform approver can perform this action' });
+  }
+  next();
+}
 
 /**
  * @openapi
@@ -75,7 +88,7 @@ async function assertWithdrawalAccess(req, campaignId) {
 }
 
 router.get('/capabilities', requireAuth, (req, res) => {
-  res.json({ can_approve_platform: req.user.role === 'admin' });
+  res.json({ can_approve_platform: canPerformPlatformSignature(req.user.userId) });
 });
 
 router.post('/request', requireAuth, withdrawalValidation, validateRequest, async (req, res) => {
@@ -499,9 +512,9 @@ const platformApproveHandler = async (req, res) => {
   }
 };
 
-router.post('/:id/approve/platform', requireAuth, requireRole('admin'), platformApproveHandler);
+router.post('/:id/approve/platform', requireAuth, requirePlatformApprover, platformApproveHandler);
 // Alias for docs + issue acceptance criteria
-router.post('/:id/approve', requireAuth, requireRole('admin'), platformApproveHandler);
+router.post('/:id/approve', requireAuth, requirePlatformApprover, platformApproveHandler);
 
 router.post('/:id/cancel', requireAuth, async (req, res) => {
   const reason = (req.body && req.body.reason) || 'Cancelled by creator';
@@ -561,7 +574,7 @@ router.post('/:id/cancel', requireAuth, async (req, res) => {
   }
 });
 
-router.post('/:id/reject', requireAuth, requireRole('admin'), async (req, res) => {
+router.post('/:id/reject', requireAuth, requirePlatformApprover, async (req, res) => {
   /**
    * @openapi
    * /api/withdrawals/{id}/reject:
