@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { api } from '../services/api';
+import { getNetwork, signTransaction } from '@stellar/freighter-api';
 import { stellarExpertTxUrl } from '../config/stellar';
 
 const ELIGIBLE = ['active', 'funded'];
@@ -133,6 +134,33 @@ export default function WithdrawalsSection({ campaign, milestones = [], user, to
       onReleased?.();
     } catch (err) {
       setError(err.message || 'Action failed.');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function signAsFreighter(id) {
+    // Fetch unsigned_xdr from server
+    setBusyId(id);
+    setError('');
+    try {
+      const wr = await api.getWithdrawal(id, token);
+      const unsignedXdr = wr.unsigned_xdr;
+      if (!unsignedXdr) throw new Error('Missing unsigned transaction');
+
+      const network = await getNetwork();
+      if (network?.error) throw new Error('Could not read Freighter network');
+
+      const signed = await signTransaction(unsignedXdr, {
+        networkPassphrase: network?.networkPassphrase,
+        address: user?.wallet_public_key,
+      });
+      if (signed?.error) throw new Error(signed.error?.message || 'Freighter signing failed');
+      if (!signed?.signedTxXdr) throw new Error('Freighter did not return a signed transaction');
+
+      await api.approveWithdrawalCreator(id, token, { signed_xdr: signed.signedTxXdr });
+    } catch (err) {
+      setError(err.message || 'Could not sign with Freighter');
     } finally {
       setBusyId(null);
     }
@@ -361,15 +389,27 @@ export default function WithdrawalsSection({ campaign, milestones = [], user, to
                     >
                       Cancel
                     </button>
-                    <button
-                      type="button"
-                      className="btn-primary"
-                      disabled={busyId === row.id}
-                      onClick={() => runAction(row.id, () => api.approveWithdrawalCreator(row.id, token))}
-                      style={{ fontSize: '0.8rem' }}
-                    >
-                      Sign as creator
-                    </button>
+                    {user?.wallet_type === 'freighter' ? (
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        disabled={busyId === row.id}
+                        onClick={() => signAsFreighter(row.id)}
+                        style={{ fontSize: '0.8rem' }}
+                      >
+                        Sign in Freighter
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        disabled={busyId === row.id}
+                        onClick={() => runAction(row.id, () => api.approveWithdrawalCreator(row.id, token))}
+                        style={{ fontSize: '0.8rem' }}
+                      >
+                        Sign as creator
+                      </button>
+                    )}
                   </>
                 )}
                 {row.status === 'pending' && row.creator_signed && !row.platform_signed && cap.can_approve_platform && (

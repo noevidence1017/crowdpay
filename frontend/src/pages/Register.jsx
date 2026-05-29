@@ -1,13 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { markJustRegistered } from '../lib/onboarding';
+import { isConnected as isFreighterConnected, getPublicKey, requestAccess } from '@stellar/freighter-api';
 
 export default function Register() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'contributor' });
+  const [freighterAvailable, setFreighterAvailable] = useState(false);
+  const [usingFreighter, setUsingFreighter] = useState(false);
+  const [freighterPublicKey, setFreighterPublicKey] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -30,7 +34,12 @@ export default function Register() {
     setLoading(true);
     setError('');
     try {
-      const { token, user } = await api.register(form);
+      const payload = { ...form };
+      if (usingFreighter) {
+        payload.wallet_type = 'freighter';
+        payload.wallet_public_key = freighterPublicKey;
+      }
+      const { token, user } = await api.register(payload);
       login(user, token);
       markJustRegistered();
       navigate(user.role === 'creator' ? '/dashboard' : '/');
@@ -38,6 +47,36 @@ export default function Register() {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const con = await isFreighterConnected();
+        if (!active) return;
+        setFreighterAvailable(Boolean(con?.isConnected));
+      } catch {
+        if (active) setFreighterAvailable(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function connectFreighter() {
+    try {
+      const access = await requestAccess();
+      if (access?.error) throw new Error(access.error?.message || 'Could not connect to Freighter');
+      const pk = access?.address || (await getPublicKey());
+      if (!pk) throw new Error('Freighter did not return a public key');
+      setFreighterPublicKey(pk);
+      setUsingFreighter(true);
+      setForm((f) => ({ ...f, password: f.password })); // keep same object
+    } catch (err) {
+      setError(err.message || 'Could not connect to Freighter');
     }
   }
 
@@ -55,6 +94,19 @@ export default function Register() {
           <option value="contributor">Contributor</option>
           <option value="creator">Creator</option>
         </select>
+        {freighterAvailable && (
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <input type="checkbox" checked={usingFreighter} onChange={(e) => setUsingFreighter(e.target.checked)} />
+              Use Freighter (self-custody)
+            </label>
+            {usingFreighter ? (
+              <button type="button" className="btn-secondary" onClick={connectFreighter}>
+                {freighterPublicKey ? 'Connected' : 'Connect Freighter'}
+              </button>
+            ) : null}
+          </div>
+        )}
         {error && <p style={{ color: 'var(--color-status-error)', fontSize: '0.875rem' }}>{error}</p>}
         <button type="submit" className="btn-primary" disabled={loading} style={{ padding: '0.8rem' }}>
           {loading ? 'Creating account…' : 'Sign up'}

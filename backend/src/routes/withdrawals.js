@@ -249,23 +249,51 @@ router.post('/:id/approve/creator', requireAuth, async (req, res) => {
   }
 
   const { rows: users } = await db.query(
-    'SELECT wallet_secret_encrypted, wallet_public_key FROM users WHERE id = $1',
+    'SELECT wallet_secret_encrypted, wallet_public_key, wallet_type FROM users WHERE id = $1',
     [req.user.userId]
   );
   let signedXdr;
+  const userRow = users[0];
   try {
-    signedXdr = await withDecryptedWalletSecret(
-      users[0].wallet_secret_encrypted,
-      {
-        userId: req.user.userId,
-        walletPublicKey: users[0].wallet_public_key,
-      },
-      async (creatorSecret) =>
-        signTransactionXdr({
-          xdr: requestRow.unsigned_xdr,
-          signerSecret: creatorSecret,
-        })
-    );
+    if (userRow.wallet_type === 'freighter') {
+      // Expect frontend to submit signed_xdr for freighter users
+      const { signed_xdr } = req.body || {};
+      if (!signed_xdr) return res.status(400).json({ error: 'signed_xdr is required for freighter users' });
+
+      // Validate the signed_xdr contains a valid signature from the creator's public key
+      try {
+        // validate signature by verifying at least one signature matches user's public key
+        const tx = require('@stellar/stellar-sdk').TransactionBuilder.fromXDR(signed_xdr, require('../config/stellar').networkPassphrase);
+        const signer = require('@stellar/stellar-sdk').Keypair.fromPublicKey(userRow.wallet_public_key);
+        const signatureValid = tx.signatures.some((decorated) => {
+          try {
+            return signer.verify(tx.hash(), decorated.signature());
+          } catch (_err) {
+            return false;
+          }
+        });
+        if (!signatureValid) {
+          return res.status(422).json({ error: 'Signed transaction does not include a valid signature by the creator' });
+        }
+      } catch (err) {
+        return res.status(422).json({ error: 'Invalid signed_xdr' });
+      }
+
+      signedXdr = signed_xdr;
+    } else {
+      signedXdr = await withDecryptedWalletSecret(
+        userRow.wallet_secret_encrypted,
+        {
+          userId: req.user.userId,
+          walletPublicKey: userRow.wallet_public_key,
+        },
+        async (creatorSecret) =>
+          signTransactionXdr({
+            xdr: requestRow.unsigned_xdr,
+            signerSecret: creatorSecret,
+          })
+      );
+    }
   } catch (err) {
     logger.error('Creator withdrawal signing failed', {
       withdrawal_id: req.params.id,
@@ -640,6 +668,18 @@ router.get('/campaign/:campaignId', requireAuth, async (req, res) => {
     [req.params.campaignId]
   );
   res.json(rows);
+});
+
+// Get a single withdrawal request (including unsigned_xdr) for authorized users
+router.get('/:id', requireAuth, async (req, res) => {
+  const { rows } = await db.query('SELECT * FROM withdrawal_requests WHERE id = $1', [req.params.id]);
+  if (!rows.length) return res.status(404).json({ error: 'Withdrawal request not found' });
+  const row = rows[0];
+  const access = await assertWithdrawalAccess(req, row.campaign_id);
+  if (access.error) return res.status(access.status).json({ error: access.error });
+
+  // Only return unsigned_xdr to owners/admins
+  res.json(row);
 });
 
 const withdrawalAuditHandler = async (req, res) => {

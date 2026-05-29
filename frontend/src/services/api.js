@@ -231,13 +231,14 @@ export const api = {
   listWithdrawals: (campaignId, token) =>
     request('GET', `/withdrawals/campaign/${campaignId}`, null, token),
   requestWithdrawal: (body, token) => request('POST', '/withdrawals/request', body, token),
-  approveWithdrawalCreator: (id, token) =>
-    request('POST', `/withdrawals/${id}/approve/creator`, {}, token),
+  approveWithdrawalCreator: (id, token, body) =>
+    request('POST', `/withdrawals/${id}/approve/creator`, body || {}, token),
   approveWithdrawalPlatform: (id, token) =>
     request('POST', `/withdrawals/${id}/approve/platform`, {}, token),
   cancelWithdrawal: (id, body, token) => request('POST', `/withdrawals/${id}/cancel`, body || {}, token),
   rejectWithdrawal: (id, body, token) => request('POST', `/withdrawals/${id}/reject`, body || {}, token),
   getWithdrawalEvents: (id, token) => request('GET', `/withdrawals/${id}/events`, null, token),
+  getWithdrawal: (id, token) => request('GET', `/withdrawals/${id}`, null, token),
 
   raiseDispute: (campaignId, body, token) =>
     request('POST', `/campaigns/${campaignId}/disputes`, body, token),

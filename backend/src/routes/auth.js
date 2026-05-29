@@ -220,16 +220,28 @@ router.post('/register', registerLimiter, registerValidation, validateRequest, a
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
-  const keypair = Keypair.random();
-  const publicKey = keypair.publicKey();
-  const secret = keypair.secret();
-  const encryptedSecret = await encryptWalletSecret(secret, { walletPublicKey: publicKey });
+
+  // Support freighter (non-custodial) registration where frontend provides wallet_public_key
+  let publicKey;
+  let encryptedSecret = null;
+  let walletType = req.body.wallet_type || 'custodial';
+
+  if (walletType === 'freighter') {
+    publicKey = req.body.wallet_public_key;
+    // wallet_public_key validated by middleware when wallet_type=freighter
+    encryptedSecret = null;
+  } else {
+    const keypair = Keypair.random();
+    publicKey = keypair.publicKey();
+    const secret = keypair.secret();
+    encryptedSecret = await encryptWalletSecret(secret, { walletPublicKey: publicKey });
+  }
 
   const { rows } = await db.query(
-    `INSERT INTO users (email, password_hash, name, wallet_public_key, wallet_secret_encrypted, role)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING id, email, name, wallet_public_key, role, kyc_status, kyc_completed_at`,
-    [normalizedEmail, passwordHash, normalizedName, publicKey, encryptedSecret, userRole]
+    `INSERT INTO users (email, password_hash, name, wallet_public_key, wallet_secret_encrypted, role, wallet_type)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     RETURNING id, email, name, wallet_public_key, role, kyc_status, kyc_completed_at, wallet_type`,
+    [normalizedEmail, passwordHash, normalizedName, publicKey, encryptedSecret, userRole, walletType]
   );
 
   const user = {
@@ -345,6 +357,7 @@ router.post('/login', loginLimiter, loginValidation, validateRequest, async (req
       email: user.email,
       name: user.name,
       wallet_public_key: user.wallet_public_key,
+      wallet_type: user.wallet_type || 'custodial',
       role: user.role,
       kyc_status: user.kyc_status,
       kyc_completed_at: user.kyc_completed_at,
@@ -376,6 +389,7 @@ router.post('/refresh', async (req, res) => {
       email: user.email,
       name: user.name,
       wallet_public_key: user.wallet_public_key,
+      wallet_type: user.wallet_type || 'custodial',
       role: user.role,
       kyc_status: user.kyc_status,
       kyc_completed_at: user.kyc_completed_at,

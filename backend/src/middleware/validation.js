@@ -38,6 +38,25 @@ const registerValidation = [
     .customSanitizer(stripHtml)
     .notEmpty()
     .withMessage('Name is required'),
+  // Optional wallet_type for non-custodial registration
+  body('wallet_type')
+    .optional()
+    .isIn(['custodial', 'freighter'])
+    .withMessage('wallet_type must be custodial or freighter'),
+  // For freighter users we accept an optional wallet_public_key
+  body('wallet_public_key')
+    .optional()
+    .custom((value, { req }) => {
+      if (req.body.wallet_type === 'freighter') {
+        try {
+          Keypair.fromPublicKey(value);
+          return true;
+        } catch (_err) {
+          throw new Error('wallet_public_key must be a valid Stellar public key');
+        }
+      }
+      return true;
+    }),
   body('role')
     .optional()
     .isIn(['contributor', 'creator'])
