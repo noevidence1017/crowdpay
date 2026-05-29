@@ -217,3 +217,42 @@ test('POST /api/campaigns/:id/trigger-refunds creates refund requests for contri
   assert.equal(created.length, 1);
   assert.equal(created[0], 'wr-1');
 });
+
+test('GET /api/campaigns supports search, asset filter, and sort', async () => {
+  const queries = [];
+  const app = buildApp({
+    queryImpl: async (text, params) => {
+      queries.push({ text, params });
+      if (text.includes('COUNT(*)')) {
+        return { rows: [{ total: 1 }] };
+      }
+      return {
+        rows: [
+          {
+            id: 'camp-1',
+            title: 'Solar panels',
+            description: 'Clean energy',
+            asset_type: 'USDC',
+            status: 'active',
+            raised_amount: '80',
+            target_amount: '100',
+          },
+        ],
+      };
+    },
+  });
+
+  const response = await request(app).get(
+    '/api/campaigns?search=solar&asset=USDC&sort=closest_to_goal'
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.total, 1);
+  assert.equal(response.body.campaigns.length, 1);
+  const listQuery = queries.find((q) => q.text.includes('ORDER BY'));
+  assert.ok(listQuery);
+  assert.match(listQuery.text, /ILIKE/i);
+  assert.match(listQuery.text, /raised_amount \/ NULLIF/i);
+  assert.ok(listQuery.params.includes('%solar%'));
+  assert.ok(listQuery.params.includes('USDC'));
+});

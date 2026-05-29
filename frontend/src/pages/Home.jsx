@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
 import CampaignCard from '../components/CampaignCard';
@@ -15,10 +15,10 @@ const STATUS_OPTIONS = ['', 'active', 'funded', 'closed', 'failed'];
 const ASSET_OPTIONS = ['', 'USDC', 'XLM'];
 const SORT_OPTIONS = [
   { value: 'newest', label: 'Newest' },
-  { value: 'ending_soon', label: 'Ending soon' },
   { value: 'most_funded', label: 'Most funded' },
-  { value: 'most_backed', label: 'Most backed' },
+  { value: 'closest_to_goal', label: 'Closest to goal' },
 ];
+const SEARCH_DEBOUNCE_MS = 450;
 
 export default function Home() {
   const [campaigns, setCampaigns] = useState([]);
@@ -29,6 +29,7 @@ export default function Home() {
   const [showContributorTips, setShowContributorTips] = useState(isContributorOnboardingVisible);
   const [welcomeNewUser, setWelcomeNewUser] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
+  const [searchInput, setSearchInput] = useState(() => searchParams.get('search') || '');
 
   const search = searchParams.get('search') || '';
   const status = searchParams.get('status') || '';
@@ -40,11 +41,26 @@ export default function Home() {
   const page = Math.floor(offset / limit) + 1;
   const lastItem = Math.min(total, offset + campaigns.length);
 
+  const hasActiveFilters =
+    Boolean(search.trim()) || Boolean(asset) || Boolean(status) || sort !== 'newest';
+
   useEffect(() => {
     if (consumeJustRegistered()) {
       setWelcomeNewUser(true);
     }
   }, []);
+
+  useEffect(() => {
+    setSearchInput(search);
+  }, [search]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchInput.trim() === search.trim()) return;
+      setFilters({ search: searchInput.trim() });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [searchInput, search]);
 
   useEffect(() => {
     setListError('');
@@ -158,10 +174,11 @@ export default function Home() {
         <label style={styles.filterItem}>
           Search
           <input
-            value={search}
-            onChange={(e) => setFilters({ search: e.target.value })}
-            placeholder="Search campaigns"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search by title or description"
             style={styles.filterInput}
+            aria-label="Search campaigns"
           />
         </label>
         <label style={styles.filterItem}>
@@ -220,7 +237,28 @@ export default function Home() {
         </p>
       ) : campaigns.length === 0 ? (
         <div className="alert alert--info">
-          {user && (user.role === 'creator' || user.role === 'admin') ? (
+          {hasActiveFilters ? (
+            <>
+              No campaigns match your search or filters.{' '}
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchInput('');
+                  setSearchParams({}, { replace: true });
+                }}
+                style={{
+                  background: 'transparent',
+                  color: 'var(--color-info-text)',
+                  fontWeight: 700,
+                  textDecoration: 'underline',
+                  padding: 0,
+                  minHeight: 'auto',
+                }}
+              >
+                Clear filters
+              </button>
+            </>
+          ) : user && (user.role === 'creator' || user.role === 'admin') ? (
             <>
               No campaigns yet.{' '}
               <Link to="/campaigns/new" style={{ color: 'var(--color-info-text)', fontWeight: 700 }}>

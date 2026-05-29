@@ -197,29 +197,33 @@ router.get('/', getCampaignsValidation, validateRequest, async (req, res) => {
 
   if (status) {
     params.push(status);
-    filters.push(`status = $${params.length}`);
+    filters.push(`c.status = $${params.length}`);
   } else {
-    filters.push(`status = 'active'`);
+    filters.push(`c.status = 'active'`);
   }
   if (asset) {
     params.push(asset);
-    filters.push(`asset_type = $${params.length}`);
+    filters.push(`c.asset_type = $${params.length}`);
   }
   if (search) {
-    params.push(search);
-    filters.push(`to_tsvector('simple', coalesce(title, '') || ' ' || coalesce(description, '')) @@ plainto_tsquery('simple', $${params.length})`);
+    const escaped = String(search).replace(/[%_\\]/g, '\\$&');
+    params.push(`%${escaped}%`);
+    filters.push(
+      `(c.title ILIKE $${params.length} OR COALESCE(c.description, '') ILIKE $${params.length})`
+    );
   }
 
   const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
-  const countQuery = `SELECT COUNT(*)::int AS total FROM campaigns ${whereClause}`;
+  const countQuery = `SELECT COUNT(*)::int AS total FROM campaigns c ${whereClause}`;
   const countResult = await db.query(countQuery, params);
   const total = countResult.rows[0]?.total || 0;
 
   const sortExpressions = {
-    newest: 'campaigns.created_at DESC',
-    ending_soon: 'campaigns.deadline ASC NULLS LAST',
-    most_funded: 'campaigns.raised_amount DESC',
-    most_backed: '(SELECT COUNT(*) FROM contributions c WHERE c.campaign_id = campaigns.id) DESC',
+    newest: 'c.created_at DESC',
+    ending_soon: 'c.deadline ASC NULLS LAST',
+    most_funded: 'c.raised_amount DESC',
+    most_backed: '(SELECT COUNT(*) FROM contributions ctr WHERE ctr.campaign_id = c.id) DESC',
+    closest_to_goal: '(c.raised_amount / NULLIF(c.target_amount, 0)) DESC NULLS LAST, c.raised_amount DESC',
   };
   const orderBy = sortExpressions[sort] || sortExpressions.newest;
 
