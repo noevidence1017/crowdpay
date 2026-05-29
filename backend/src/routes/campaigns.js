@@ -27,6 +27,10 @@ const {
 
 const crypto = require('crypto');
 
+function stripHtml(value = '') {
+  return String(value).replace(/<[^>]*>/g, '').trim();
+}
+
 /**
  * @openapi
  * tags:
@@ -774,6 +778,123 @@ router.post('/', requireAuth, requireRole('creator', 'admin'), createCampaignVal
   watchCampaignWallet(campaign.id, wallet.publicKey);
 
   res.status(201).json(campaign);
+});
+
+// PATCH /campaigns/:id - Update campaign (title, description, deadline)
+router.patch('/:id', requireAuth, async (req, res) => {
+  const campaignId = req.params.id;
+  const { title, description, deadline } = req.body;
+
+  // Check if campaign exists and belongs to user
+  const { rows: campaignRows } = await db.query(
+    'SELECT * FROM campaigns WHERE id = $1',
+    [campaignId]
+  );
+  if (!campaignRows.length) {
+    return res.status(404).json({ error: 'Campaign not found' });
+  }
+
+  const campaign = campaignRows[0];
+  if (campaign.creator_id !== req.user.userId) {
+    return res.status(403).json({ error: 'You do not have permission to edit this campaign' });
+  }
+
+  // Refresh campaign status to check current state
+  await refreshCampaignStatus(campaignId);
+
+  const { rows: updatedStatusRows } = await db.query(
+    'SELECT status FROM campaigns WHERE id = $1',
+    [campaignId]
+  );
+  const currentStatus = updatedStatusRows[0].status;
+
+  // Only allow editing active or funded campaigns
+  if (!['active', 'funded'].includes(currentStatus)) {
+    return res.status(422).json({
+      error: `Cannot edit a campaign with status: ${currentStatus}`
+    });
+  }
+
+  // Validate and prepare update object
+  const updates = {};
+  const updateParams = [];
+  let paramIndex = 1;
+
+  if (title !== undefined) {
+    const cleanTitle = stripHtml(title);
+    if (!cleanTitle) {
+      return res.status(422).json({ error: 'Title cannot be empty' });
+    }
+    if (cleanTitle.length > 100) {
+      return res.status(422).json({ error: 'Title must be at most 100 characters' });
+    }
+    updates.title = cleanTitle;
+    updateParams.push(['title', cleanTitle, `$${paramIndex++}`]);
+  }
+
+  if (description !== undefined) {
+    const cleanDesc = stripHtml(description);
+    if (cleanDesc.length > 1000) {
+      return res.status(422).json({ error: 'Description must be at most 1000 characters' });
+    }
+    updates.description = cleanDesc;
+    updateParams.push(['description', cleanDesc, `$${paramIndex++}`]);
+  }
+
+  if (deadline !== undefined && deadline !== null && deadline !== '') {
+    // Validate ISO8601 format
+    const deadlineDate = new Date(deadline);
+    if (isNaN(deadlineDate.getTime())) {
+      return res.status(422).json({ error: 'Deadline must be a valid date' });
+    }
+
+    // Check deadline is not in the past
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    deadlineDate.setHours(0, 0, 0, 0);
+
+    if (deadlineDate < today) {
+      return res.status(422).json({ error: 'Deadline cannot be in the past' });
+    }
+
+    updates.deadline = deadline;
+    updateParams.push(['deadline', deadline, `$${paramIndex++}`]);
+  }
+
+  // Check if any valid updates were provided
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ error: 'No valid fields to update' });
+  }
+
+  // Check for invalid fields in request body
+  const allowedFields = ['title', 'description', 'deadline'];
+  for (const field of Object.keys(req.body)) {
+    if (!allowedFields.includes(field)) {
+      return res.status(422).json({
+        error: `Cannot update field: ${field}`
+      });
+    }
+  }
+
+  // Build and execute update query
+  const setClause = updateParams.map(([field, , placeholder]) => `${field} = ${placeholder}`).join(', ');
+  const values = updateParams.map(([, value]) => value);
+  values.push(campaignId);
+  values.push(req.user.userId);
+
+  const query = `
+    UPDATE campaigns
+    SET ${setClause}
+    WHERE id = $${paramIndex} AND creator_id = $${paramIndex + 1}
+    RETURNING *
+  `;
+
+  const { rows: updatedRows } = await db.query(query, values);
+  if (!updatedRows.length) {
+    return res.status(404).json({ error: 'Campaign not found' });
+  }
+
+  res.json(updatedRows[0]);
 });
 
 router.post(

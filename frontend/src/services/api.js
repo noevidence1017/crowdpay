@@ -183,6 +183,7 @@ export const api = {
   getCampaignBackers: (id) => request('GET', `/campaigns/${id}/backers`),
   getCampaignBalance: (id) => request('GET', `/campaigns/${id}/balance`),
   createCampaign: (body, token) => request('POST', '/campaigns', body, token),
+  updateCampaign: (id, body, token) => request('PATCH', `/campaigns/${id}`, body, token),
   uploadCampaignCoverImage: (campaignId, file, token) => {
     const formData = new FormData();
     formData.append('cover_image', file);

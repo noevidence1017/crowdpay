@@ -67,6 +67,15 @@ export default function Campaign() {
   const [showEmbedSection, setShowEmbedSection] = useState(false);
   const [embedCopied, setEmbedCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [isEditingCampaign, setIsEditingCampaign] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    title: "",
+    description: "",
+    deadline: ""
+  });
+  const [editError, setEditError] = useState("");
+  const [editSuccess, setEditSuccess] = useState("");
+  const [editLoading, setEditLoading] = useState(false);
 
   useEffect(() => {
     setLoadError("");
@@ -253,6 +262,81 @@ export default function Campaign() {
       alert(err.message || "Failed to remove member");
     }
   }
+
+  function handleOpenEditModal() {
+    if (!campaign) return;
+    setEditFormData({
+      title: campaign.title || "",
+      description: campaign.description || "",
+      deadline: campaign.deadline ? campaign.deadline.split("T")[0] : ""
+    });
+    setEditError("");
+    setEditSuccess("");
+    setIsEditingCampaign(true);
+  }
+
+  function handleCloseEditModal() {
+    setIsEditingCampaign(false);
+    setEditFormData({ title: "", description: "", deadline: "" });
+    setEditError("");
+    setEditSuccess("");
+  }
+
+  async function handleSaveEdit() {
+    setEditError("");
+
+    // Validate form
+    if (!editFormData.title.trim()) {
+      setEditError("Title is required");
+      return;
+    }
+    if (editFormData.title.length > 100) {
+      setEditError("Title must be at most 100 characters");
+      return;
+    }
+    if (editFormData.description.length > 1000) {
+      setEditError("Description must be at most 1000 characters");
+      return;
+    }
+    if (editFormData.deadline) {
+      const deadlineDate = new Date(editFormData.deadline);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      deadlineDate.setHours(0, 0, 0, 0);
+      if (deadlineDate < today) {
+        setEditError("Deadline cannot be in the past");
+        return;
+      }
+    }
+
+    try {
+      setEditLoading(true);
+      const updates = {};
+      if (editFormData.title !== campaign.title) updates.title = editFormData.title;
+      if (editFormData.description !== campaign.description) updates.description = editFormData.description;
+      if (editFormData.deadline !== (campaign.deadline ? campaign.deadline.split("T")[0] : "")) {
+        updates.deadline = editFormData.deadline || null;
+      }
+
+      if (Object.keys(updates).length === 0) {
+        setEditError("No changes to save");
+        setEditLoading(false);
+        return;
+      }
+
+      const updated = await api.updateCampaign(campaign.id, updates, token);
+      setCampaign(updated);
+      setIsEditingCampaign(false);
+      setEditFormData({ title: "", description: "", deadline: "" });
+      setEditSuccess("Campaign updated successfully!");
+      setTimeout(() => setEditSuccess(""), 3000);
+    } catch (err) {
+      setEditError(err.message || "Failed to update campaign");
+    } finally {
+      setEditLoading(false);
+    }
+  }
+
   useEffect(() => {
     if (!campaign) return;
     document.title = `${campaign.title} | CrowdPay`;
@@ -395,6 +479,15 @@ export default function Campaign() {
         >
           <strong>Legacy campaign:</strong> this campaign was created before
           creator identity verification was required.
+        </div>
+      )}
+      {editSuccess && (
+        <div
+          className="alert alert--success"
+          style={{ marginBottom: "1.25rem" }}
+          role="status"
+        >
+          {editSuccess}
         </div>
       )}
       {campaign.cover_image_url && (
@@ -611,6 +704,33 @@ export default function Campaign() {
           </button>
         </div>
       </div>
+
+      {/* Edit campaign button - visible only to creator */}
+      {user && campaign && user.userId === campaign.creator_id && ['active', 'funded'].includes(campaign.status) && (
+        <div
+          style={{
+            display: "flex",
+            gap: "0.65rem",
+            marginBottom: "1.75rem",
+          }}
+        >
+          <button
+            type="button"
+            className="btn-secondary"
+            style={{
+              flex: 1,
+              fontSize: "0.85rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "0.5rem",
+            }}
+            onClick={handleOpenEditModal}
+          >
+            Edit Campaign
+          </button>
+        </div>
+      )}
 
       <div style={styles.walletInfo}>
         <span style={styles.walletLabel}>Campaign wallet</span>
@@ -1114,6 +1234,136 @@ export default function Campaign() {
           onClose={() => setShowDisputeModal(false)}
           onSubmitted={() => setDisputeSubmitted(true)}
         />
+      )}
+
+      {/* Edit Campaign Modal */}
+      {isEditingCampaign && campaign && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+          onClick={handleCloseEditModal}
+        >
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: "12px",
+              padding: "2rem",
+              maxWidth: "500px",
+              width: "90%",
+              maxHeight: "90vh",
+              overflowY: "auto",
+              boxShadow: "0 20px 60px rgba(0, 0, 0, 0.3)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ marginTop: 0, marginBottom: "1.5rem", fontSize: "1.5rem" }}>
+              Edit Campaign
+            </h2>
+
+            {editError && (
+              <p style={{ color: "#d32f2f", marginBottom: "1rem", padding: "0.75rem", background: "#ffebee", borderRadius: "6px" }}>
+                {editError}
+              </p>
+            )}
+
+            <div style={{ marginBottom: "1.5rem" }}>
+              <label style={{ display: "block", fontWeight: 600, marginBottom: "0.5rem" }}>
+                Title
+              </label>
+              <input
+                type="text"
+                value={editFormData.title}
+                onChange={(e) => setEditFormData({ ...editFormData, title: e.target.value })}
+                maxLength={100}
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  fontSize: "1rem",
+                  boxSizing: "border-box",
+                }}
+              />
+              <p style={{ fontSize: "0.85rem", color: "#888", margin: "0.25rem 0 0" }}>
+                {editFormData.title.length}/100
+              </p>
+            </div>
+
+            <div style={{ marginBottom: "1.5rem" }}>
+              <label style={{ display: "block", fontWeight: 600, marginBottom: "0.5rem" }}>
+                Description
+              </label>
+              <textarea
+                value={editFormData.description}
+                onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
+                maxLength={1000}
+                rows={5}
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  fontSize: "1rem",
+                  fontFamily: "inherit",
+                  boxSizing: "border-box",
+                }}
+              />
+              <p style={{ fontSize: "0.85rem", color: "#888", margin: "0.25rem 0 0" }}>
+                {editFormData.description.length}/1000
+              </p>
+            </div>
+
+            <div style={{ marginBottom: "1.5rem" }}>
+              <label style={{ display: "block", fontWeight: 600, marginBottom: "0.5rem" }}>
+                Deadline (optional)
+              </label>
+              <input
+                type="date"
+                value={editFormData.deadline}
+                onChange={(e) => setEditFormData({ ...editFormData, deadline: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  fontSize: "1rem",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: "1rem", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={handleCloseEditModal}
+                disabled={editLoading}
+                style={{ opacity: editLoading ? 0.6 : 1 }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={handleSaveEdit}
+                disabled={editLoading}
+                style={{ opacity: editLoading ? 0.6 : 1 }}
+              >
+                {editLoading ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   );
