@@ -779,8 +779,14 @@ router.post('/', requireAuth, requireRole('creator', 'admin'), createCampaignVal
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
-    logger.error('Campaign creation failed', { error: err.message });
-    return res.status(500).json({ error: 'Could not create campaign' });
+    logger.error('[campaigns] DB insert failed after wallet creation. Orphaned wallet:', {
+      publicKey: wallet.publicKey,
+      creatorUserId: req.user.userId,
+      error: err.message,
+    });
+    return res.status(500).json({
+      error: 'Campaign could not be saved. Wallet creation may have succeeded — contact support.',
+    });
   } finally {
     client.release();
   }

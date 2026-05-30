@@ -9,6 +9,7 @@
 const { server } = require('../config/stellar');
 const db = require('../config/database');
 const logger = require('../config/logger');
+const { getCampaignBalance } = require('./stellarService');
 const { markContributionIndexed } = require('./stellarTransactionService');
 const { emitWebhookEventForUser, WEBHOOK_EVENTS } = require('./webhookDispatcher');
 
@@ -158,7 +159,7 @@ async function handlePayment(campaignId, walletPublicKey, payment) {
     'SELECT status FROM campaigns WHERE id = $1',
     [campaignId]
   );
-  if (!campaignRows.length || campaignRows[0].status !== 'active') return;
+  if (!campaignRows.length || !['active', 'funded'].includes(campaignRows[0].status)) return;
 
   const destinationAsset = payment.asset_type === 'native' ? 'XLM' : payment.asset_code;
   const destinationAmount = parseFloat(payment.amount);
@@ -234,16 +235,17 @@ async function handlePayment(campaignId, walletPublicKey, payment) {
       ]
     );
 
-    await client.query(
-      `UPDATE campaigns SET raised_amount = raised_amount + $1 WHERE id = $2`,
-      [destinationAmount, campaignId]
-    );
-
     const { rows: fundedRows } = await client.query(
-      `UPDATE campaigns SET status = 'funded'
-       WHERE id = $1 AND status = 'active' AND raised_amount >= target_amount
-       RETURNING id, creator_id, title, raised_amount, target_amount, asset_type`,
-      [campaignId]
+      `UPDATE campaigns
+       SET raised_amount = raised_amount + $1,
+           status = CASE
+             WHEN raised_amount + $1 >= target_amount THEN 'funded'
+             ELSE status
+           END
+       WHERE id = $2
+       RETURNING id, creator_id, title, raised_amount, target_amount, asset_type,
+         (raised_amount >= target_amount AND raised_amount - $1 < target_amount) AS newly_funded`,
+      [destinationAmount, campaignId]
     );
 
     await markContributionIndexed(client, txHash, inserted[0].id);
@@ -261,7 +263,7 @@ async function handlePayment(campaignId, walletPublicKey, payment) {
     }
 
     const { rows: updatedCampaign } = await client.query(
-      'SELECT raised_amount FROM campaigns WHERE id = $1',
+      'SELECT raised_amount, status FROM campaigns WHERE id = $1',
       [campaignId]
     );
 
@@ -270,7 +272,7 @@ async function handlePayment(campaignId, walletPublicKey, payment) {
       creatorId,
       contributionId: inserted[0].id,
       campaignId,
-      fundedCampaign: fundedRows[0] || null,
+      fundedCampaign: fundedRows[0]?.newly_funded ? fundedRows[0] : null,
       contributionPayload: {
         id: inserted[0].id,
         campaign_id: campaignId,
@@ -307,6 +309,7 @@ async function handlePayment(campaignId, walletPublicKey, payment) {
         display_name: displayName,
       },
       raised_amount: updatedCampaign[0]?.raised_amount,
+      status: updatedCampaign[0]?.status,
     });
   } catch (err) {
     try {
@@ -454,9 +457,47 @@ async function watchCampaignWallet(campaignId, walletPublicKey) {
   await openStreamForWallet(campaignId, walletPublicKey);
 }
 
+const RECONCILE_INTERVAL_MS = 10 * 60 * 1000;
+
+/**
+ * Compare each campaign's DB raised_amount against live Horizon balance.
+ */
+async function reconcileCampaignBalances() {
+  const { rows } = await db.query(
+    `SELECT id, wallet_public_key, raised_amount, asset_type, status
+     FROM campaigns
+     WHERE status IN ('active', 'funded')`
+  );
+
+  for (const campaign of rows) {
+    try {
+      const balances = await getCampaignBalance(campaign.wallet_public_key);
+      const onChain = parseFloat(balances[campaign.asset_type] || '0');
+      const inDb = parseFloat(campaign.raised_amount);
+      const delta = Math.abs(onChain - inDb);
+      if (delta > 0.0000001) {
+        logger.warn('Campaign raised_amount differs from Horizon balance', {
+          campaign_id: campaign.id,
+          wallet_public_key: campaign.wallet_public_key,
+          raised_amount_db: inDb,
+          balance_horizon: onChain,
+          asset_type: campaign.asset_type,
+          delta,
+        });
+      }
+    } catch (err) {
+      logger.error('Balance reconciliation failed for campaign', {
+        campaign_id: campaign.id,
+        wallet_public_key: campaign.wallet_public_key,
+        error: err.message,
+      });
+    }
+  }
+}
+
 async function startLedgerMonitor() {
   const { rows } = await db.query(
-    `SELECT id, wallet_public_key FROM campaigns WHERE status = 'active'`
+    `SELECT id, wallet_public_key FROM campaigns WHERE status IN ('active', 'funded')`
   );
 
   await Promise.all(
@@ -471,7 +512,13 @@ async function startLedgerMonitor() {
     )
   );
 
-  logger.info('Watching active campaigns', { active_campaigns: rows.length });
+  logger.info('Watching active and funded campaigns', { campaign_count: rows.length });
+
+  setInterval(() => {
+    reconcileCampaignBalances().catch((err) =>
+      logger.error('Periodic balance reconciliation failed', { error: err.message })
+    );
+  }, RECONCILE_INTERVAL_MS);
 
   setInterval(() => {
     getLedgerStreamHealth()
@@ -494,7 +541,7 @@ async function getLedgerStreamHealth() {
             lc.last_cursor, lc.updated_at AS cursor_updated_at
      FROM campaigns c
      LEFT JOIN ledger_stream_cursors lc ON lc.campaign_id = c.id
-     WHERE c.status = 'active'`
+     WHERE c.status IN ('active', 'funded')`
   );
 
   const streams = dbCursors.map((row) => {
@@ -534,6 +581,7 @@ module.exports = {
   startLedgerMonitor,
   watchCampaignWallet,
   handlePayment,
+  reconcileCampaignBalances,
   getLedgerStreamHealth,
   addSSEClient,
   removeSSEClient,
