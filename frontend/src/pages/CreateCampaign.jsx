@@ -32,7 +32,7 @@ function milestonePercentTotal(milestones) {
 }
 
 export default function CreateCampaign() {
-  const { token, user, ready, updateUser } = useAuth();
+  const { user, ready, updateUser } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
@@ -50,15 +50,15 @@ export default function CreateCampaign() {
   const [showCreatorTips, setShowCreatorTips] = useState(isCreatorOnboardingVisible);
 
   useEffect(() => {
-    if (ready && !token) {
+    if (ready && !user) {
       navigate('/login', { replace: true, state: { from: '/campaigns/new' } });
     }
-  }, [ready, token, navigate]);
+  }, [ready, user, navigate]);
 
   useEffect(() => {
-    if (!token) return;
-    api.getMe(token).then(updateUser).catch(() => {});
-  }, [token, updateUser]);
+    if (!user) return;
+    api.getMe().then(updateUser).catch(() => {});
+  }, [user, updateUser]);
 
   function setField(field) {
     return (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
@@ -221,14 +221,13 @@ export default function CreateCampaign() {
                 release_percentage: Number(milestone.release_percentage),
               }))
             : undefined,
-        },
-        token
+        }
       );
 
       let coverUploadError = '';
       if (coverImageFile) {
         try {
-          await api.uploadCampaignCoverImage(campaign.id, coverImageFile, token);
+          await api.uploadCampaignCoverImage(campaign.id, coverImageFile);
         } catch (uploadError) {
           coverUploadError = uploadError.message || 'Campaign created, but cover image upload failed.';
         }
@@ -256,7 +255,7 @@ export default function CreateCampaign() {
     );
   }
 
-  if (!token) {
+  if (!user) {
     return (
       <main className="container page-narrow" style={{ paddingTop: '3rem' }}>
         <p className="alert alert--info">Redirecting to sign in…</p>

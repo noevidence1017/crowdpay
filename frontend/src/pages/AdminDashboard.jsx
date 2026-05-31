@@ -5,18 +5,18 @@ import { useNavigate } from 'react-router-dom';
 
 const DISPUTE_STATUSES = ['open', 'under_review', 'resolved_creator', 'resolved_contributor', 'closed'];
 
-function DisputeQueue({ token }) {
+function DisputeQueue() {
   const [disputes, setDisputes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
 
   useEffect(() => {
     // Load open/under_review disputes across all campaigns via admin endpoint
-    api.getAdminCampaigns(token)
+    api.getAdminCampaigns()
       .then(async (campaigns) => {
         const all = await Promise.all(
           campaigns.map((c) =>
-            api.getCampaignDisputes(c.id, token)
+            api.getCampaignDisputes(c.id)
               .then((ds) => ds.map((d) => ({ ...d, campaign_title: c.title })))
               .catch(() => [])
           )
@@ -24,14 +24,14 @@ function DisputeQueue({ token }) {
         setDisputes(all.flat().sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
       })
       .finally(() => setLoading(false));
-  }, [token]);
+  }, []);
 
   async function resolve(dispute, status) {
     const note = window.prompt(`Resolution note (${status}):`, '');
     if (note === null) return;
     setBusyId(dispute.id);
     try {
-      const updated = await api.updateDispute(dispute.id, { status, resolution_note: note || undefined }, token);
+      const updated = await api.updateDispute(dispute.id, { status, resolution_note: note || undefined });
       setDisputes((prev) => prev.map((d) => (d.id === updated.id ? { ...d, ...updated } : d)));
     } catch (err) {
       alert(err.message || 'Could not update dispute');
@@ -98,7 +98,7 @@ function DisputeQueue({ token }) {
 }
 
 export default function AdminDashboard() {
-  const { user, token, ready } = useAuth();
+  const { user, ready } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [campaigns, setCampaigns] = useState([]);
@@ -121,11 +121,11 @@ export default function AdminDashboard() {
     }
 
     Promise.all([
-      api.getAdminStats(token),
-      api.getAdminCampaigns(token),
-      api.getAdminMilestones(token),
-      api.getAdminUsers(token),
-      api.getAdminAuditLog(token)
+      api.getAdminStats(),
+      api.getAdminCampaigns(),
+      api.getAdminMilestones(),
+      api.getAdminUsers(true),
+      api.getAdminAuditLog()
     ]).then(([st, camp, milestoneRows, usrs, audit]) => {
       setStats(st);
       setCampaigns(camp);
@@ -138,34 +138,34 @@ export default function AdminDashboard() {
       navigate('/');
     });
 
-  }, [ready, user, token, navigate]);
+  }, [ready, user, navigate]);
 
   if (!ready || loading) return <div className="container" style={{padding:'2rem'}}>Loading admin panel...</div>;
 
   async function refreshCampaigns() {
-    const camp = await api.getAdminCampaigns(token);
+    const camp = await api.getAdminCampaigns();
     setCampaigns(camp);
   }
 
   async function refreshUsers() {
-    const usrs = await api.getAdminUsers(token, true);
+    const usrs = await api.getAdminUsers(true);
     setUsers(usrs);
   }
 
   async function refreshAuditLog() {
-    const audit = await api.getAdminAuditLog(token);
+    const audit = await api.getAdminAuditLog();
     setAuditLog(audit);
   }
 
   async function refreshMilestones() {
-    const rows = await api.getAdminMilestones(token);
+    const rows = await api.getAdminMilestones();
     setMilestones(rows);
   }
 
   async function approveMilestone(id) {
     setBusyMilestoneId(id);
     try {
-      await api.approveMilestone(id, {}, token);
+      await api.approveMilestone(id, {});
       await refreshMilestones();
       await refreshCampaigns();
     } finally {
@@ -178,7 +178,7 @@ export default function AdminDashboard() {
     if (reason === null) return;
     setBusyMilestoneId(id);
     try {
-      await api.rejectMilestone(id, { reason: reason || 'Rejected by platform' }, token);
+      await api.rejectMilestone(id, { reason: reason || 'Rejected by platform' });
       await refreshMilestones();
     } finally {
       setBusyMilestoneId(null);
@@ -190,7 +190,7 @@ export default function AdminDashboard() {
     if (reason === null) return;
     setBusyCampaignId(campaignId);
     try {
-      await api.adminSuspendCampaign(campaignId, { reason }, token);
+      await api.adminSuspendCampaign(campaignId, { reason });
       await refreshCampaigns();
       await refreshAuditLog();
       alert('Campaign suspended');
@@ -205,7 +205,7 @@ export default function AdminDashboard() {
     if (!window.confirm('Restore this campaign to active?')) return;
     setBusyCampaignId(campaignId);
     try {
-      await api.adminRestoreCampaign(campaignId, token);
+      await api.adminRestoreCampaign(campaignId);
       await refreshCampaigns();
       await refreshAuditLog();
       alert('Campaign restored');
@@ -222,7 +222,7 @@ export default function AdminDashboard() {
     if (!window.confirm('This will permanently delete the campaign. Are you sure?')) return;
     setBusyCampaignId(campaignId);
     try {
-      await api.adminDeleteCampaign(campaignId, { reason }, token);
+      await api.adminDeleteCampaign(campaignId, { reason });
       await refreshCampaigns();
       await refreshAuditLog();
       alert('Campaign deleted');
@@ -238,7 +238,7 @@ export default function AdminDashboard() {
     if (reason === null) return;
     setBusyUserId(userId);
     try {
-      await api.adminBanUser(userId, { reason }, token);
+      await api.adminBanUser(userId, { reason });
       await refreshUsers();
       await refreshAuditLog();
       alert('User banned');
@@ -253,7 +253,7 @@ export default function AdminDashboard() {
     if (!window.confirm('Unban this user?')) return;
     setBusyUserId(userId);
     try {
-      await api.adminUnbanUser(userId, token);
+      await api.adminUnbanUser(userId);
       await refreshUsers();
       await refreshAuditLog();
       alert('User unbanned');
@@ -453,7 +453,7 @@ export default function AdminDashboard() {
       {activeTab === 'disputes' && (
         <>
           <h2 style={{fontSize:'1.4rem', fontWeight:700, marginBottom:'1rem'}}>Dispute Queue</h2>
-          <DisputeQueue token={token} />
+          <DisputeQueue />
         </>
       )}
 
@@ -499,7 +499,7 @@ export default function AdminDashboard() {
                 <td style={tdStyle}>{c.status}</td>
                 <td style={tdStyle}>
                   <select value={c.status} onChange={(e) => {
-                    api.updateCampaignStatus(c.id, e.target.value, token).then(() => {
+                    api.updateCampaignStatus(c.id, e.target.value).then(() => {
                       setCampaigns(campaigns.map(camp => camp.id === c.id ? {...camp, status: e.target.value} : camp));
                     });
                   }} style={{padding:'0.3rem', borderRadius:'4px', border:'1px solid var(--color-border-light)'}}>

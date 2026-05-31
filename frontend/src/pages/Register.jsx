@@ -39,8 +39,8 @@ export default function Register() {
         payload.wallet_type = 'freighter';
         payload.wallet_public_key = freighterPublicKey;
       }
-      const { token, user } = await api.register(payload);
-      login(user, token);
+      const { user } = await api.register(payload);
+      login(user);
       markJustRegistered();
       navigate(user.role === 'creator' ? '/dashboard' : '/');
     } catch (err) {
