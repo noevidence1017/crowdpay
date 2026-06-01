@@ -27,6 +27,13 @@ const {
 
 const PLATFORM_KEYPAIR = Keypair.fromSecret(process.env.PLATFORM_SECRET_KEY);
 
+function calcFee(amount) {
+  const bps = parseInt(process.env.PLATFORM_FEE_BPS || '0', 10);
+  const fee = parseFloat((parseFloat(amount) * bps / 10000).toFixed(7));
+  const net = parseFloat((parseFloat(amount) - fee).toFixed(7));
+  return { feeAmount: fee, campaignAmount: net, bps };
+}
+
 function toStellarAsset(assetCode) {
   if (assetCode === 'XLM') return Asset.native();
   if (assetCode === 'USDC') return USDC;
@@ -213,9 +220,44 @@ async function createCampaignWallet(creatorPublicKey) {
 
   return {
     publicKey: campaignKeypair.publicKey(),
-    // In production: encrypt and store secret, never return it
     secret: campaignKeypair.secret(),
   };
+}
+
+/**
+ * Build an unsigned payment contribution transaction.
+ */
+async function buildUnsignedContributionPayment({
+  senderPublicKey,
+  destinationPublicKey,
+  asset,
+  amount,
+  memo,
+}) {
+  const senderAccount = await server.loadAccount(senderPublicKey);
+  const stellarAsset = toStellarAsset(asset);
+  const { feeAmount, campaignAmount } = calcFee(amount);
+
+  const builder = new TransactionBuilder(senderAccount, { fee: BASE_FEE, networkPassphrase })
+    .addOperation(
+      Operation.payment({
+        destination: destinationPublicKey,
+        asset: stellarAsset,
+        amount: String(campaignAmount),
+      })
+    );
+
+  if (feeAmount > 0) {
+    builder.addOperation(
+      Operation.payment({
+        destination: PLATFORM_KEYPAIR.publicKey(),
+        asset: stellarAsset,
+        amount: String(feeAmount),
+      })
+    );
+  }
+
+  return tx.toXDR();
 }
 
 /**
@@ -229,28 +271,17 @@ async function prepareSignedContributionPayment({
   memo,
 }) {
   const senderKeypair = Keypair.fromSecret(senderSecret);
-  const senderAccount = await server.loadAccount(senderKeypair.publicKey());
-  const stellarAsset = toStellarAsset(asset);
-
-  const tx = new TransactionBuilder(senderAccount, {
-    fee: BASE_FEE,
-    networkPassphrase,
-  })
-    .addOperation(
-      Operation.payment({
-        destination: destinationPublicKey,
-        asset: stellarAsset,
-        amount: String(amount),
-      })
-    )
-    .addMemo(Memo.text(memo || 'crowdpay'))
-    .setTimeout(30)
-    .build();
-
-  const unsignedXdr = tx.toXDR();
+  const unsignedXdr = await buildUnsignedContributionPayment({
+    senderPublicKey: senderKeypair.publicKey(),
+    destinationPublicKey,
+    asset,
+    amount,
+    memo,
+  });
+  const tx = TransactionBuilder.fromXDR(unsignedXdr, networkPassphrase);
   tx.sign(senderKeypair);
   const signedXdr = tx.toXDR();
-  return { unsignedXdr, signedXdr };
+  return { unsignedXdr, signedXdr, feeAmount };
 }
 
 /**
@@ -260,6 +291,59 @@ async function prepareSignedContributionPayment({
 async function submitPayment(params) {
   const { signedXdr } = await prepareSignedContributionPayment(params);
   return submitPreparedTransaction(signedXdr);
+}
+
+/**
+ * Build an unsigned path payment contribution; `destAssetCode` is the asset the campaign receives.
+ */
+async function buildUnsignedContributionPathPayment({
+  senderPublicKey,
+  destinationPublicKey,
+  sendAsset,
+  sendMax,
+  destAmount,
+  destAssetCode,
+  memo,
+}) {
+  const senderAccount = await server.loadAccount(senderPublicKey);
+  const sourceStellarAsset = toStellarAsset(sendAsset);
+  const destStellarAsset = toStellarAsset(destAssetCode);
+  const { feeAmount, campaignAmount, bps } = calcFee(destAmount);
+
+  const sendMaxFloat = parseFloat(sendMax);
+  const campaignSendMax = feeAmount > 0
+    ? ((sendMaxFloat * (1 - bps / 10000)).toFixed(7))
+    : sendMax;
+  const feeSendMax = feeAmount > 0
+    ? ((sendMaxFloat * (bps / 10000)).toFixed(7))
+    : '0';
+
+  const builder = new TransactionBuilder(senderAccount, { fee: BASE_FEE, networkPassphrase })
+    .addOperation(
+      Operation.pathPaymentStrictReceive({
+        sendAsset: sourceStellarAsset,
+        sendMax: String(campaignSendMax),
+        destination: destinationPublicKey,
+        destAsset: destStellarAsset,
+        destAmount: String(campaignAmount),
+        path: [],
+      })
+    );
+
+  if (feeAmount > 0) {
+    builder.addOperation(
+      Operation.pathPaymentStrictReceive({
+        sendAsset: sourceStellarAsset,
+        sendMax: String(feeSendMax),
+        destination: PLATFORM_KEYPAIR.publicKey(),
+        destAsset: destStellarAsset,
+        destAmount: String(feeAmount),
+        path: [],
+      })
+    );
+  }
+
+  return tx.toXDR();
 }
 
 /**
@@ -275,32 +359,19 @@ async function prepareSignedContributionPathPayment({
   memo,
 }) {
   const senderKeypair = Keypair.fromSecret(senderSecret);
-  const senderAccount = await server.loadAccount(senderKeypair.publicKey());
-  const sourceStellarAsset = toStellarAsset(sendAsset);
-  const destStellarAsset = toStellarAsset(destAssetCode);
-
-  const tx = new TransactionBuilder(senderAccount, {
-    fee: BASE_FEE,
-    networkPassphrase,
-  })
-    .addOperation(
-      Operation.pathPaymentStrictReceive({
-        sendAsset: sourceStellarAsset,
-        sendMax: String(sendMax),
-        destination: destinationPublicKey,
-        destAsset: destStellarAsset,
-        destAmount: String(destAmount),
-        path: [], // empty path lets Stellar use direct market routing
-      })
-    )
-    .addMemo(Memo.text(memo || 'crowdpay'))
-    .setTimeout(30)
-    .build();
-
-  const unsignedXdr = tx.toXDR();
+  const unsignedXdr = await buildUnsignedContributionPathPayment({
+    senderPublicKey: senderKeypair.publicKey(),
+    destinationPublicKey,
+    sendAsset,
+    sendMax,
+    destAmount,
+    destAssetCode,
+    memo,
+  });
+  const tx = TransactionBuilder.fromXDR(unsignedXdr, networkPassphrase);
   tx.sign(senderKeypair);
   const signedXdr = tx.toXDR();
-  return { unsignedXdr, signedXdr };
+  return { unsignedXdr, signedXdr, feeAmount };
 }
 
 /**
@@ -367,7 +438,7 @@ async function buildWithdrawalTransaction({
         amount: String(amount),
       })
     )
-    .setTimeout(300) // 5 minutes for both parties to sign
+    .setTimeout(60 * 60 * 24 * 7) // 7 days — platform approver may not be available immediately
     .build();
 
   return tx.toXDR();
@@ -391,6 +462,20 @@ function signTransactionXdr({ xdr, signerSecret }) {
 function signatureCountFromXdr(xdr) {
   const tx = new Transaction(xdr, networkPassphrase);
   return tx.signatures.length;
+}
+
+/**
+ * Returns true if the XDR transaction's maxTime has already passed.
+ * Returns false if the XDR cannot be parsed or has no time bounds set.
+ */
+function isXdrExpired(xdr) {
+  try {
+    const tx = TransactionBuilder.fromXDR(xdr, networkPassphrase);
+    const { timeBounds } = tx;
+    return !!(timeBounds && Math.floor(Date.now() / 1000) > Number(timeBounds.maxTime));
+  } catch {
+    return false;
+  }
 }
 
 async function submitPreparedTransaction(xdr) {
@@ -418,7 +503,60 @@ async function getCampaignBalance(publicKey) {
 
 /**
  * Fund a new account on testnet using Friendbot.
+
+/**
+ * Recover campaign wallet from encrypted secret.
  */
+function recoverWalletFromSecret(secret) {
+  const keypair = Keypair.fromSecret(secret);
+  return {
+    publicKey: keypair.publicKey(),
+    secret: keypair.secret(),
+  };
+}
+
+/**
+ * Get transaction history for a campaign wallet.
+ */
+async function getWalletTransactionHistory(publicKey, limit = 50) {
+  const txs = await server.transactions()
+    .forAccount(publicKey)
+    .order('desc')
+    .limit(limit)
+    .call();
+  
+  return txs.records.map(tx => ({
+    hash: tx.hash,
+    created_at: tx.created_at,
+    source_account: tx.source_account,
+    fee_charged: tx.fee_charged,
+    operation_count: tx.operation_count,
+    memo: tx.memo,
+  }));
+}
+
+/**
+ * Get payment operations for a campaign wallet (audit trail).
+ */
+async function getWalletPayments(publicKey, limit = 100) {
+  const payments = await server.payments()
+    .forAccount(publicKey)
+    .order('desc')
+    .limit(limit)
+    .call();
+  
+  return payments.records.map(p => ({
+    id: p.id,
+    type: p.type,
+    created_at: p.created_at,
+    transaction_hash: p.transaction_hash,
+    from: p.from,
+    to: p.to,
+    amount: p.amount,
+    asset_type: p.asset_type === 'native' ? 'XLM' : p.asset_code,
+  }));
+}
+
 async function friendbotFund(publicKey) {
   if (!isTestnet) throw new Error('Friendbot only available on testnet');
   const response = await fetch(
@@ -435,6 +573,8 @@ module.exports = {
   ensureCustodialAccountFundedAndTrusted,
   fundCustodialAccountFromPlatformIfNeeded,
   submitMissingTrustlinesForCustodialAccount,
+  buildUnsignedContributionPayment,
+  buildUnsignedContributionPathPayment,
   prepareSignedContributionPayment,
   prepareSignedContributionPathPayment,
   submitPayment,
@@ -445,7 +585,12 @@ module.exports = {
   getAccountMultisigConfig,
   signTransactionXdr,
   signatureCountFromXdr,
+  isXdrExpired,
   submitSignedWithdrawal,
+  recoverWalletFromSecret,
+  getWalletTransactionHistory,
+  getWalletPayments,
+
   getCampaignBalance,
   friendbotFund,
   PLATFORM_PUBLIC_KEY: PLATFORM_KEYPAIR.publicKey(),

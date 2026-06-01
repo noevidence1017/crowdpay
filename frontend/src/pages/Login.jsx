@@ -10,16 +10,25 @@ export default function Login() {
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   function set(field) { return (e) => setForm((f) => ({ ...f, [field]: e.target.value })); }
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (!form.email.trim() || !form.password.trim()) {
+      setError('Email and password are required.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      setError('Enter a valid email address.');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
-      const { token, user } = await api.login(form);
-      login(user, token);
+      const { user } = await api.login(form);
+      login(user);
       navigate(location.state?.from || '/', { replace: true });
     } catch (err) {
       setError(err.message);
@@ -31,22 +40,52 @@ export default function Login() {
   return (
     <main className="container" style={{ paddingTop: '4rem', maxWidth: '400px' }}>
       <h1 style={{ fontSize: '1.6rem', fontWeight: 800, marginBottom: '1.5rem' }}>Log in</h1>
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-        <div className="form-stack">
-          <label className="label-strong" htmlFor="login-email">Email</label>
-          <input id="login-email" type="email" placeholder="you@example.com" value={form.email} onChange={set('email')} required aria-required="true" autoComplete="email" />
+      <form noValidate onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+        <input type="email" placeholder="Email" value={form.email} onChange={set('email')} required />
+        <div style={{ position: 'relative' }}>
+          <input
+            id="login-password"
+            type={showPassword ? 'text' : 'password'}
+            placeholder="Password"
+            value={form.password}
+            onChange={set('password')}
+            required
+            style={{ paddingRight: '2.5rem', width: '100%' }}
+            autoComplete="current-password"
+          />
+          <button
+            type="button"
+            aria-label={showPassword ? 'Hide password' : 'Show password'}
+            onClick={() => setShowPassword((v) => !v)}
+            style={{
+              position: 'absolute',
+              right: '0.6rem',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: '#888',
+              padding: '0.2rem',
+              minHeight: 'auto',
+              fontSize: '0.85rem',
+            }}
+          >
+            {showPassword ? 'Hide' : 'Show'}
+          </button>
         </div>
-        <div className="form-stack">
-          <label className="label-strong" htmlFor="login-password">Password</label>
-          <input id="login-password" type="password" placeholder="••••••••" value={form.password} onChange={set('password')} required aria-required="true" autoComplete="current-password" />
-        </div>
-        {error && <p role="alert" className="alert alert--error">{error}</p>}
+        {error && <p style={{ color: 'var(--color-status-error)', fontSize: '0.875rem' }}>{error}</p>}
         <button type="submit" className="btn-primary" disabled={loading} style={{ padding: '0.8rem' }}>
           {loading ? 'Logging in…' : 'Log in'}
         </button>
+        <div style={{ textAlign: 'center' }}>
+          <Link to="/forgot-password" style={{ color: 'var(--color-text-hint)', fontSize: '0.85rem', textDecoration: 'none' }}>
+            Forgot password?
+          </Link>
+        </div>
       </form>
-      <p style={{ marginTop: '1.25rem', color: '#666', fontSize: '0.9rem' }}>
-        No account? <Link to="/register" style={{ color: '#7c3aed', fontWeight: 600 }}>Sign up</Link>
+      <p style={{ marginTop: '1.25rem', color: 'var(--color-text-hint)', fontSize: '0.9rem' }}>
+        No account? <Link to="/register" style={{ color: 'var(--color-accent)', fontWeight: 600 }}>Sign up</Link>
       </p>
     </main>
   );

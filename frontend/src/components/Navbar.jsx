@@ -1,15 +1,22 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
+import { api } from '../services/api';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
+  const { dark, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
   function handleLogout() {
     logout();
     navigate('/');
+  }
+
+  function closeMenu() {
+    setMenuOpen(false);
   }
 
   return (
@@ -40,8 +47,11 @@ export default function Navbar() {
 }
 
 const styles = {
-  nav: { background: '#fff', borderBottom: '1px solid #e5e5e5', position: 'sticky', top: 0, zIndex: 10 },
-  logo: { fontWeight: 800, fontSize: '1.15rem', color: '#7c3aed' },
-  link: { color: '#444', fontWeight: 500, fontSize: '0.9rem' },
-  name: { color: '#555', fontSize: '0.85rem', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  nav: { background: 'var(--color-bg)', borderBottom: '1px solid var(--color-border)', position: 'sticky', top: 0, zIndex: 10 },
+  logo: { fontWeight: 800, fontSize: '1.15rem', color: 'var(--color-accent)' },
+  link: { color: 'var(--color-text-secondary)', fontWeight: 500, fontSize: '0.9rem' },
+  name: { color: 'var(--color-text-secondary)', fontSize: '0.85rem', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  balance: { color: 'var(--color-text-hint)', fontSize: '0.8rem', fontFamily: 'monospace' },
+  balanceLoading: { color: 'var(--color-text-muted)', fontSize: '0.8rem' },
+  themeToggle: { background: 'transparent', border: 'none', fontSize: '1.2rem', cursor: 'pointer', padding: '0.4rem 0.6rem', borderRadius: '6px', transition: 'background 0.15s' },
 };

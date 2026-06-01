@@ -1,69 +1,104 @@
 const router = require('express').Router();
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const { Keypair } = require('@stellar/stellar-sdk');
 const db = require('../config/database');
-const { ensureCustodialAccountFundedAndTrusted } = require('../services/stellarService');
+const { requireAuth } = require('../middleware/auth');
+const { createKycSession, isKycRequiredForCampaigns } = require('../services/kycProvider');
+const { listCreatorCampaigns, listUserContributions } = require('../services/userDashboardService');
+const asyncHandler = require('../utils/asyncHandler');
 
-// Register — creates user + custodial Stellar keypair
-router.post('/register', async (req, res) => {
-  const { email, password, name } = req.body;
-  if (!email || !password || !name) {
-    return res.status(400).json({ error: 'email, password and name are required' });
-  }
-
-  const existing = await db.query('SELECT id FROM users WHERE email = $1', [email]);
-  if (existing.rows.length > 0) {
-    return res.status(409).json({ error: 'Email already registered' });
-  }
-
-  const passwordHash = await bcrypt.hash(password, 10);
-  const keypair = Keypair.random();
-
+router.get('/me', requireAuth, asyncHandler(async (req, res) => {
   const { rows } = await db.query(
-    `INSERT INTO users (email, password_hash, name, wallet_public_key, wallet_secret_encrypted)
-     VALUES ($1, $2, $3, $4, $5) RETURNING id, email, name, wallet_public_key`,
-    [email, passwordHash, name, keypair.publicKey(), keypair.secret()]
-    // TODO: encrypt secret with KMS before storing in production
+    `SELECT id, email, name, wallet_public_key, wallet_type, role, kyc_status, kyc_completed_at, created_at
+     FROM users
+     WHERE id = $1`,
+    [req.user.userId]
   );
+  if (!rows.length) return res.status(404).json({ error: 'User not found' });
+  res.json({ ...rows[0], kyc_required_for_campaigns: isKycRequiredForCampaigns() });
+}));
 
-  const token = jwt.sign({ userId: rows[0].id }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN,
-  });
+router.post('/me/kyc/start', requireAuth, asyncHandler(async (req, res) => {
+  const { rows } = await db.query(
+    `SELECT id, email, name, role, kyc_status
+     FROM users
+     WHERE id = $1`,
+    [req.user.userId]
+  );
+  if (!rows.length) return res.status(404).json({ error: 'User not found' });
 
-  const publicKey = keypair.publicKey();
-  const secret = keypair.secret();
-  setImmediate(() => {
-    ensureCustodialAccountFundedAndTrusted({ publicKey, secret }).catch((err) => {
-      console.error('[users] Background Stellar funding/trustlines failed:', err.message);
+  const user = rows[0];
+  if (user.kyc_status === 'verified') {
+    return res.json({
+      status: 'verified',
+      message: 'Identity verification is already complete.',
     });
-  });
-
-  res.status(201).json({ token, user: rows[0] });
-});
-
-// Login
-router.post('/login', async (req, res) => {
-  const { email, password } = req.body;
-  const { rows } = await db.query('SELECT * FROM users WHERE email = $1', [email]);
-
-  if (!rows.length || !(await bcrypt.compare(password, rows[0].password_hash))) {
-    return res.status(401).json({ error: 'Invalid credentials' });
   }
 
-  const token = jwt.sign({ userId: rows[0].id }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN,
-  });
+  try {
+    const session = await createKycSession({ user });
+    const { rows: updatedRows } = await db.query(
+      `UPDATE users
+       SET kyc_status = 'pending',
+           kyc_provider_reference = COALESCE($2, kyc_provider_reference),
+           kyc_completed_at = NULL
+       WHERE id = $1
+       RETURNING id, email, name, wallet_public_key, role, kyc_status, kyc_completed_at`,
+      [user.id, session.providerReference || null]
+    );
 
-  res.json({
-    token,
-    user: {
-      id: rows[0].id,
-      email: rows[0].email,
-      name: rows[0].name,
-      wallet_public_key: rows[0].wallet_public_key,
-    },
-  });
-});
+    res.status(201).json({
+      status: updatedRows[0].kyc_status,
+      provider: session.provider,
+      provider_reference: session.providerReference,
+      redirect_url: session.redirectUrl,
+      session_token: session.sessionToken,
+      user: {
+        ...updatedRows[0],
+        kyc_required_for_campaigns: isKycRequiredForCampaigns(),
+      },
+    });
+  } catch (err) {
+    res.status(502).json({ error: err.message || 'Could not start identity verification' });
+  }
+}));
+
+router.get('/me/campaigns', requireAuth, asyncHandler(async (req, res) => {
+  const campaigns = await listCreatorCampaigns(req.user.userId);
+  res.json(campaigns);
+}));
+
+router.get('/me/stats', requireAuth, asyncHandler(async (req, res) => {
+  const { rows } = await db.query(
+    `SELECT
+      COUNT(*)::int AS total_campaigns,
+      COALESCE(SUM(raised_amount), 0)::numeric AS total_raised,
+      COUNT(*) FILTER (WHERE status = 'active')::int AS active_campaigns,
+      COUNT(*) FILTER (WHERE status = 'funded')::int AS funded_campaigns,
+      COUNT(*) FILTER (WHERE status = 'in_progress')::int AS in_progress_campaigns,
+      COUNT(*) FILTER (WHERE status IN ('completed', 'closed', 'withdrawn', 'failed'))::int AS closed_campaigns
+     FROM campaigns
+     WHERE creator_id = $1`,
+    [req.user.userId]
+  );
+  res.json(rows[0]);
+}));
+
+const { getCampaignBalance } = require('../services/stellarService');
+
+router.get('/me/balance', requireAuth, asyncHandler(async (req, res) => {
+  const { rows } = await db.query(
+    'SELECT wallet_public_key FROM users WHERE id = $1',
+    [req.user.userId]
+  );
+  if (!rows.length) return res.status(404).json({ error: 'User not found' });
+
+  const balance = await getCampaignBalance(rows[0].wallet_public_key);
+  res.json({ balance, public_key: rows[0].wallet_public_key });
+}));
+
+router.get('/me/contributions', requireAuth, asyncHandler(async (req, res) => {
+  const rows = await listUserContributions(req.user.userId);
+  if (rows === null) return res.status(404).json({ error: 'User not found' });
+  res.json(rows);
+}));
 
 module.exports = router;
