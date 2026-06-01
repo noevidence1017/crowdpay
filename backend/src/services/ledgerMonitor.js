@@ -6,12 +6,16 @@
  * Reconnects with exponential backoff on stream errors.
  */
 
-const { server } = require('../config/stellar');
-const db = require('../config/database');
-const logger = require('../config/logger');
-const { getCampaignBalance } = require('./stellarService');
-const { markContributionIndexed } = require('./stellarTransactionService');
-const { emitWebhookEventForUser, WEBHOOK_EVENTS } = require('./webhookDispatcher');
+const { server } = require("../config/stellar");
+const db = require("../config/database");
+const logger = require("../config/logger");
+const { getCampaignBalance } = require("./stellarService");
+const { markContributionIndexed } = require("./stellarTransactionService");
+const { sendContributionReceipt } = require("./emailService");
+const {
+  emitWebhookEventForUser,
+  WEBHOOK_EVENTS,
+} = require("./webhookDispatcher");
 
 /** wallet_public_key -> stream metadata */
 const streamRegistry = new Map();
@@ -53,14 +57,14 @@ function broadcastCampaignUpdate(campaignId, data) {
 const MAX_RECONNECT_DELAY_MS = 60_000;
 
 function extractPagingToken(record) {
-  if (!record || typeof record !== 'object') return null;
+  if (!record || typeof record !== "object") return null;
   return record.paging_token || record.pagingToken || record.id || null;
 }
 
 async function loadCursor(campaignId) {
   const { rows } = await db.query(
-    'SELECT last_cursor FROM ledger_stream_cursors WHERE campaign_id = $1',
-    [campaignId]
+    "SELECT last_cursor FROM ledger_stream_cursors WHERE campaign_id = $1",
+    [campaignId],
   );
   return rows.length ? rows[0].last_cursor : null;
 }
@@ -74,19 +78,23 @@ async function saveCursor(campaignId, walletPublicKey, cursorToken) {
      SET last_cursor = EXCLUDED.last_cursor,
          wallet_public_key = EXCLUDED.wallet_public_key,
          updated_at = NOW()`,
-    [campaignId, walletPublicKey, String(cursorToken)]
+    [campaignId, walletPublicKey, String(cursorToken)],
   );
 }
 
 function registrySet(walletPublicKey, patch) {
   const prev = streamRegistry.get(walletPublicKey) || {
     wallet_public_key: walletPublicKey,
-    state: 'idle',
+    state: "idle",
     last_message_at: null,
     last_error: null,
     reconnect_attempt: 0,
   };
-  streamRegistry.set(walletPublicKey, { ...prev, ...patch, wallet_public_key: walletPublicKey });
+  streamRegistry.set(walletPublicKey, {
+    ...prev,
+    ...patch,
+    wallet_public_key: walletPublicKey,
+  });
 }
 
 /**
@@ -103,11 +111,11 @@ async function replayMissedPayments(campaignId, walletPublicKey) {
         .payments()
         .forAccount(walletPublicKey)
         .cursor(cursor)
-        .order('asc')
+        .order("asc")
         .limit(100)
         .call();
     } catch (err) {
-      logger.error('Ledger REST replay failed; continuing with stream', {
+      logger.error("Ledger REST replay failed; continuing with stream", {
         wallet_public_key: walletPublicKey,
         campaign_id: campaignId,
         error: err.message,
@@ -122,7 +130,8 @@ async function replayMissedPayments(campaignId, walletPublicKey) {
       await onPaymentRecord(campaignId, walletPublicKey, record);
     }
 
-    const pageToken = page.paging_token || extractPagingToken(records[records.length - 1]);
+    const pageToken =
+      page.paging_token || extractPagingToken(records[records.length - 1]);
     if (!pageToken || pageToken === cursor) break;
     cursor = pageToken;
     if (records.length < 100) break;
@@ -141,7 +150,7 @@ async function onPaymentRecord(campaignId, walletPublicKey, record) {
       try {
         await saveCursor(campaignId, walletPublicKey, token);
       } catch (e) {
-        logger.error('Failed to persist ledger cursor', {
+        logger.error("Failed to persist ledger cursor", {
           wallet_public_key: walletPublicKey,
           campaign_id: campaignId,
           error: e.message,
@@ -153,22 +162,37 @@ async function onPaymentRecord(campaignId, walletPublicKey, record) {
 
 async function handlePayment(campaignId, walletPublicKey, payment) {
   if (payment.to !== walletPublicKey) return;
-  if (payment.type !== 'payment' && payment.type !== 'path_payment_strict_receive') return;
+  if (
+    payment.type !== "payment" &&
+    payment.type !== "path_payment_strict_receive"
+  )
+    return;
 
   const { rows: campaignRows } = await db.query(
-    'SELECT status FROM campaigns WHERE id = $1',
-    [campaignId]
+    "SELECT status FROM campaigns WHERE id = $1",
+    [campaignId],
   );
-  if (!campaignRows.length || !['active', 'funded'].includes(campaignRows[0].status)) return;
+  if (
+    !campaignRows.length ||
+    !["active", "funded"].includes(campaignRows[0].status)
+  )
+    return;
 
-  const destinationAsset = payment.asset_type === 'native' ? 'XLM' : payment.asset_code;
+  const destinationAsset =
+    payment.asset_type === "native" ? "XLM" : payment.asset_code;
   const destinationAmount = parseFloat(payment.amount);
   const sourceAsset = payment.source_asset_type
-    ? (payment.source_asset_type === 'native' ? 'XLM' : payment.source_asset_code)
+    ? payment.source_asset_type === "native"
+      ? "XLM"
+      : payment.source_asset_code
     : null;
-  const sourceAmount = payment.source_amount ? parseFloat(payment.source_amount) : null;
+  const sourceAmount = payment.source_amount
+    ? parseFloat(payment.source_amount)
+    : null;
   const path = Array.isArray(payment.path)
-    ? payment.path.map((asset) => (asset.asset_type === 'native' ? 'XLM' : asset.asset_code))
+    ? payment.path.map((asset) =>
+        asset.asset_type === "native" ? "XLM" : asset.asset_code,
+      )
     : null;
   const paymentType = payment.type;
   const conversionRate =
@@ -179,22 +203,22 @@ async function handlePayment(campaignId, walletPublicKey, payment) {
   let postCommitHooks = null;
   try {
     const existing = await client.query(
-      'SELECT id FROM contributions WHERE tx_hash = $1',
-      [txHash]
+      "SELECT id FROM contributions WHERE tx_hash = $1",
+      [txHash],
     );
     if (existing.rows.length > 0) return;
 
     const { rows: txRows } = await client.query(
       `SELECT metadata FROM stellar_transactions WHERE tx_hash = $1 AND kind = 'contribution'`,
-      [txHash]
+      [txHash],
     );
     const platformFeeAmount = txRows[0]?.metadata?.platform_fee_amount ?? null;
 
-    await client.query('BEGIN');
+    await client.query("BEGIN");
 
     const { rows: creatorRows } = await client.query(
-      'SELECT creator_id FROM campaigns WHERE id = $1',
-      [campaignId]
+      "SELECT creator_id FROM campaigns WHERE id = $1",
+      [campaignId],
     );
     const creatorId = creatorRows[0].creator_id;
 
@@ -203,7 +227,7 @@ async function handlePayment(campaignId, walletPublicKey, payment) {
        FROM stellar_transactions
        WHERE tx_hash = $1 AND kind = 'contribution'
        LIMIT 1`,
-      [txHash]
+      [txHash],
     );
     const anchorMetadata = submittedRows[0]?.metadata?.anchor || null;
     const displayName = submittedRows[0]?.metadata?.display_name || null;
@@ -232,7 +256,7 @@ async function handlePayment(campaignId, walletPublicKey, payment) {
         txHash,
         platformFeeAmount,
         displayName,
-      ]
+      ],
     );
 
     const { rows: fundedRows } = await client.query(
@@ -245,7 +269,7 @@ async function handlePayment(campaignId, walletPublicKey, payment) {
        WHERE id = $2
        RETURNING id, creator_id, title, raised_amount, target_amount, asset_type,
          (raised_amount >= target_amount AND raised_amount - $1 < target_amount) AS newly_funded`,
-      [destinationAmount, campaignId]
+      [destinationAmount, campaignId],
     );
 
     await markContributionIndexed(client, txHash, inserted[0].id);
@@ -258,16 +282,16 @@ async function handlePayment(campaignId, walletPublicKey, payment) {
              updated_at = NOW(),
              completed_at = COALESCE(completed_at, NOW())
          WHERE id = $2`,
-        [inserted[0].id, anchorMetadata.anchor_deposit_id]
+        [inserted[0].id, anchorMetadata.anchor_deposit_id],
       );
     }
 
     const { rows: updatedCampaign } = await client.query(
-      'SELECT raised_amount, status FROM campaigns WHERE id = $1',
-      [campaignId]
+      "SELECT raised_amount, status FROM campaigns WHERE id = $1",
+      [campaignId],
     );
 
-    await client.query('COMMIT');
+    await client.query("COMMIT");
     postCommitHooks = {
       creatorId,
       contributionId: inserted[0].id,
@@ -283,8 +307,15 @@ async function handlePayment(campaignId, walletPublicKey, payment) {
         payment_type: paymentType,
         anchor_transaction_id: anchorMetadata?.anchor_transaction_id || null,
       },
+      receiptPayload: {
+        campaignId,
+        txHash,
+        amount: destinationAmount,
+        asset: destinationAsset,
+        senderPublicKey: payment.from,
+      },
     };
-    logger.info('Contribution indexed', {
+    logger.info("Contribution indexed", {
       campaign_id: campaignId,
       wallet_public_key: walletPublicKey,
       amount: destinationAmount,
@@ -293,7 +324,7 @@ async function handlePayment(campaignId, walletPublicKey, payment) {
     });
 
     broadcastCampaignUpdate(campaignId, {
-      type: 'contribution',
+      type: "contribution",
       contribution: {
         id: inserted[0].id,
         campaign_id: campaignId,
@@ -313,11 +344,11 @@ async function handlePayment(campaignId, walletPublicKey, payment) {
     });
   } catch (err) {
     try {
-      await client.query('ROLLBACK');
+      await client.query("ROLLBACK");
     } catch {
       // ignore rollback errors after failed work
     }
-    logger.error('Failed to index contribution', {
+    logger.error("Failed to index contribution", {
       campaign_id: campaignId,
       tx_hash: txHash,
       error: err.message,
@@ -328,261 +359,289 @@ async function handlePayment(campaignId, walletPublicKey, payment) {
 
   if (postCommitHooks) {
     setImmediate(() => {
+      sendContributionReceipt(postCommitHooks.receiptPayload).catch((e) =>
+        logger.error("[receipt] Email failed", {
+          campaign_id: postCommitHooks.campaignId,
+          tx_hash: postCommitHooks.receiptPayload.txHash,
+          error: e.message,
+        }),
+      );
+
       emitWebhookEventForUser(
         postCommitHooks.creatorId,
         WEBHOOK_EVENTS.CONTRIBUTION_RECEIVED,
-        postCommitHooks.contributionPayload
+        postCommitHooks.contributionPayload,
       ).catch((e) =>
-        logger.error('Contribution webhook emit failed', { error: e.message })
+        logger.error("Contribution webhook emit failed", { error: e.message }),
       );
+
       if (postCommitHooks.fundedCampaign) {
         emitWebhookEventForUser(
           postCommitHooks.fundedCampaign.creator_id,
           WEBHOOK_EVENTS.CAMPAIGN_FUNDED,
-          { campaign: postCommitHooks.fundedCampaign }
+          { campaign: postCommitHooks.fundedCampaign },
         ).catch((e) =>
-          logger.error('Funded webhook emit failed', { error: e.message })
+          logger.error("Funded webhook emit failed", { error: e.message }),
         );
       }
     });
   }
-}
 
-function scheduleStreamReconnect(campaignId, walletPublicKey, attempt) {
-  const delay = Math.min(MAX_RECONNECT_DELAY_MS, 1000 * 2 ** Math.max(0, attempt - 1));
-  registrySet(walletPublicKey, {
-    state: 'reconnecting',
-    reconnect_attempt: attempt,
-    next_reconnect_at: new Date(Date.now() + delay).toISOString(),
-  });
-  logger.info('Scheduling ledger stream reconnect', {
-    wallet_public_key: walletPublicKey,
-    campaign_id: campaignId,
-    delay_ms: delay,
-    attempt,
-  });
-  setTimeout(() => {
-    watchCampaignWallet(campaignId, walletPublicKey)
-      .then(() => reconnectAttempts.delete(walletPublicKey))
-      .catch((err) =>
-        logger.error('Ledger stream reconnect failed', {
-          wallet_public_key: walletPublicKey,
-          campaign_id: campaignId,
-          error: err.message,
-        })
-      );
-  }, delay);
-}
-
-async function openStreamForWallet(campaignId, walletPublicKey) {
-  const stored = await loadCursor(campaignId);
-  const streamCursor = stored || 'now';
-
-  logger.info('Opening ledger stream', {
-    wallet_public_key: walletPublicKey,
-    campaign_id: campaignId,
-    cursor_mode: stored ? 'resumed' : 'now',
-  });
-
-  const closeStream = server
-    .payments()
-    .forAccount(walletPublicKey)
-    .cursor(streamCursor)
-    .stream({
-      onmessage: (record) => {
-        reconnectAttempts.delete(walletPublicKey);
-        registrySet(walletPublicKey, {
-          state: 'connected',
-          last_message_at: new Date().toISOString(),
-          reconnect_attempt: 0,
-          last_error: null,
-        });
-        onPaymentRecord(campaignId, walletPublicKey, record).catch((err) =>
-          logger.error('Ledger onPaymentRecord failed', {
+  function scheduleStreamReconnect(campaignId, walletPublicKey, attempt) {
+    const delay = Math.min(
+      MAX_RECONNECT_DELAY_MS,
+      1000 * 2 ** Math.max(0, attempt - 1),
+    );
+    registrySet(walletPublicKey, {
+      state: "reconnecting",
+      reconnect_attempt: attempt,
+      next_reconnect_at: new Date(Date.now() + delay).toISOString(),
+    });
+    logger.info("Scheduling ledger stream reconnect", {
+      wallet_public_key: walletPublicKey,
+      campaign_id: campaignId,
+      delay_ms: delay,
+      attempt,
+    });
+    setTimeout(() => {
+      watchCampaignWallet(campaignId, walletPublicKey)
+        .then(() => reconnectAttempts.delete(walletPublicKey))
+        .catch((err) =>
+          logger.error("Ledger stream reconnect failed", {
             wallet_public_key: walletPublicKey,
             campaign_id: campaignId,
             error: err.message,
-          })
+          }),
         );
-      },
-      onerror: (err) => {
-        logger.error('Ledger stream error', {
-          wallet_public_key: walletPublicKey,
-          campaign_id: campaignId,
-          error: err.message,
-        });
-        const snap = streamRegistry.get(walletPublicKey);
-        const attempt = (reconnectAttempts.get(walletPublicKey) || 0) + 1;
-        reconnectAttempts.set(walletPublicKey, attempt);
-        try {
-          if (snap && typeof snap.close === 'function') snap.close();
-        } catch {
-          // ignore
-        }
-        streamRegistry.delete(walletPublicKey);
-        scheduleStreamReconnect(campaignId, walletPublicKey, attempt);
-      },
+    }, delay);
+  }
+
+  async function openStreamForWallet(campaignId, walletPublicKey) {
+    const stored = await loadCursor(campaignId);
+    const streamCursor = stored || "now";
+
+    logger.info("Opening ledger stream", {
+      wallet_public_key: walletPublicKey,
+      campaign_id: campaignId,
+      cursor_mode: stored ? "resumed" : "now",
     });
 
-  registrySet(walletPublicKey, {
-    close: closeStream,
-    campaign_id: campaignId,
-    wallet_public_key: walletPublicKey,
-    state: 'connected',
-    stream_cursor: streamCursor,
-    opened_at: new Date().toISOString(),
-    reconnect_attempt: 0,
-    last_error: null,
-  });
-}
-
-/**
- * REST-replay from DB cursor, then open SSE stream (with auto-reconnect on errors).
- */
-async function watchCampaignWallet(campaignId, walletPublicKey) {
-  const existing = streamRegistry.get(walletPublicKey);
-  if (existing && existing.state === 'connected' && typeof existing.close === 'function') {
-    return;
-  }
-  if (existing) {
-    try {
-      if (typeof existing.close === 'function') existing.close();
-    } catch {
-      // ignore
-    }
-    streamRegistry.delete(walletPublicKey);
-  }
-
-  await replayMissedPayments(campaignId, walletPublicKey);
-  await openStreamForWallet(campaignId, walletPublicKey);
-}
-
-const RECONCILE_INTERVAL_MS = 10 * 60 * 1000;
-
-/**
- * Compare each campaign's DB raised_amount against live Horizon balance.
- */
-async function reconcileCampaignBalances() {
-  const { rows } = await db.query(
-    `SELECT id, wallet_public_key, raised_amount, asset_type, status
-     FROM campaigns
-     WHERE status IN ('active', 'funded')`
-  );
-
-  for (const campaign of rows) {
-    try {
-      const balances = await getCampaignBalance(campaign.wallet_public_key);
-      const onChain = parseFloat(balances[campaign.asset_type] || '0');
-      const inDb = parseFloat(campaign.raised_amount);
-      const delta = Math.abs(onChain - inDb);
-      if (delta > 0.0000001) {
-        logger.warn('Campaign raised_amount differs from Horizon balance', {
-          campaign_id: campaign.id,
-          wallet_public_key: campaign.wallet_public_key,
-          raised_amount_db: inDb,
-          balance_horizon: onChain,
-          asset_type: campaign.asset_type,
-          delta,
-        });
-      }
-    } catch (err) {
-      logger.error('Balance reconciliation failed for campaign', {
-        campaign_id: campaign.id,
-        wallet_public_key: campaign.wallet_public_key,
-        error: err.message,
+    const closeStream = server
+      .payments()
+      .forAccount(walletPublicKey)
+      .cursor(streamCursor)
+      .stream({
+        onmessage: (record) => {
+          reconnectAttempts.delete(walletPublicKey);
+          registrySet(walletPublicKey, {
+            state: "connected",
+            last_message_at: new Date().toISOString(),
+            reconnect_attempt: 0,
+            last_error: null,
+          });
+          onPaymentRecord(campaignId, walletPublicKey, record).catch((err) =>
+            logger.error("Ledger onPaymentRecord failed", {
+              wallet_public_key: walletPublicKey,
+              campaign_id: campaignId,
+              error: err.message,
+            }),
+          );
+        },
+        onerror: (err) => {
+          logger.error("Ledger stream error", {
+            wallet_public_key: walletPublicKey,
+            campaign_id: campaignId,
+            error: err.message,
+          });
+          const snap = streamRegistry.get(walletPublicKey);
+          const attempt = (reconnectAttempts.get(walletPublicKey) || 0) + 1;
+          reconnectAttempts.set(walletPublicKey, attempt);
+          try {
+            if (snap && typeof snap.close === "function") snap.close();
+          } catch {
+            // ignore
+          }
+          streamRegistry.delete(walletPublicKey);
+          scheduleStreamReconnect(campaignId, walletPublicKey, attempt);
+        },
       });
-    }
+
+    registrySet(walletPublicKey, {
+      close: closeStream,
+      campaign_id: campaignId,
+      wallet_public_key: walletPublicKey,
+      state: "connected",
+      stream_cursor: streamCursor,
+      opened_at: new Date().toISOString(),
+      reconnect_attempt: 0,
+      last_error: null,
+    });
   }
-}
 
-async function startLedgerMonitor() {
-  const { rows } = await db.query(
-    `SELECT id, wallet_public_key FROM campaigns WHERE status IN ('active', 'funded')`
-  );
+  /**
+   * REST-replay from DB cursor, then open SSE stream (with auto-reconnect on errors).
+   */
+  async function watchCampaignWallet(campaignId, walletPublicKey) {
+    const existing = streamRegistry.get(walletPublicKey);
+    if (
+      existing &&
+      existing.state === "connected" &&
+      typeof existing.close === "function"
+    ) {
+      return;
+    }
+    if (existing) {
+      try {
+        if (typeof existing.close === "function") existing.close();
+      } catch {
+        // ignore
+      }
+      streamRegistry.delete(walletPublicKey);
+    }
 
-  await Promise.all(
-    rows.map((campaign) =>
-      watchCampaignWallet(campaign.id, campaign.wallet_public_key).catch((err) =>
-        logger.error('Failed to watch campaign wallet', {
-          wallet_public_key: campaign.wallet_public_key,
-          campaign_id: campaign.id,
-          error: err.message,
-        })
-      )
-    )
-  );
+    await replayMissedPayments(campaignId, walletPublicKey);
+    await openStreamForWallet(campaignId, walletPublicKey);
+  }
 
-  logger.info('Watching active and funded campaigns', { campaign_count: rows.length });
+  const RECONCILE_INTERVAL_MS = 10 * 60 * 1000;
 
-  setInterval(() => {
-    reconcileCampaignBalances().catch((err) =>
-      logger.error('Periodic balance reconciliation failed', { error: err.message })
+  /**
+   * Compare each campaign's DB raised_amount against live Horizon balance.
+   */
+  async function reconcileCampaignBalances() {
+    const { rows } = await db.query(
+      `SELECT id, wallet_public_key, raised_amount, asset_type, status
+     FROM campaigns
+     WHERE status IN ('active', 'funded')`,
     );
-  }, RECONCILE_INTERVAL_MS);
 
-  setInterval(() => {
-    getLedgerStreamHealth()
-      .then((h) => {
-        const bad = h.streams.filter((s) => s.stale_stream_no_messages_15m);
-        if (bad.length) {
-          logger.warn('Ledger stream health: connected streams idle >15m', {
-            wallet_public_keys: bad.map((b) => b.wallet_public_key),
+    for (const campaign of rows) {
+      try {
+        const balances = await getCampaignBalance(campaign.wallet_public_key);
+        const onChain = parseFloat(balances[campaign.asset_type] || "0");
+        const inDb = parseFloat(campaign.raised_amount);
+        const delta = Math.abs(onChain - inDb);
+        if (delta > 0.0000001) {
+          logger.warn("Campaign raised_amount differs from Horizon balance", {
+            campaign_id: campaign.id,
+            wallet_public_key: campaign.wallet_public_key,
+            raised_amount_db: inDb,
+            balance_horizon: onChain,
+            asset_type: campaign.asset_type,
+            delta,
           });
         }
-      })
-      .catch(() => {});
-  }, 5 * 60 * 1000);
-}
+      } catch (err) {
+        logger.error("Balance reconciliation failed for campaign", {
+          campaign_id: campaign.id,
+          wallet_public_key: campaign.wallet_public_key,
+          error: err.message,
+        });
+      }
+    }
+  }
 
-/** For GET /health/ledger — in-process stream status + DB cursors. */
-async function getLedgerStreamHealth() {
-  const { rows: dbCursors } = await db.query(
-    `SELECT c.id AS campaign_id, c.wallet_public_key, c.status AS campaign_status,
+  async function startLedgerMonitor() {
+    const { rows } = await db.query(
+      `SELECT id, wallet_public_key FROM campaigns WHERE status IN ('active', 'funded')`,
+    );
+
+    await Promise.all(
+      rows.map((campaign) =>
+        watchCampaignWallet(campaign.id, campaign.wallet_public_key).catch(
+          (err) =>
+            logger.error("Failed to watch campaign wallet", {
+              wallet_public_key: campaign.wallet_public_key,
+              campaign_id: campaign.id,
+              error: err.message,
+            }),
+        ),
+      ),
+    );
+
+    logger.info("Watching active and funded campaigns", {
+      campaign_count: rows.length,
+    });
+
+    setInterval(() => {
+      reconcileCampaignBalances().catch((err) =>
+        logger.error("Periodic balance reconciliation failed", {
+          error: err.message,
+        }),
+      );
+    }, RECONCILE_INTERVAL_MS);
+
+    setInterval(
+      () => {
+        getLedgerStreamHealth()
+          .then((h) => {
+            const bad = h.streams.filter((s) => s.stale_stream_no_messages_15m);
+            if (bad.length) {
+              logger.warn("Ledger stream health: connected streams idle >15m", {
+                wallet_public_keys: bad.map((b) => b.wallet_public_key),
+              });
+            }
+          })
+          .catch(() => {});
+      },
+      5 * 60 * 1000,
+    );
+  }
+
+  /** For GET /health/ledger — in-process stream status + DB cursors. */
+  async function getLedgerStreamHealth() {
+    const { rows: dbCursors } = await db.query(
+      `SELECT c.id AS campaign_id, c.wallet_public_key, c.status AS campaign_status,
             lc.last_cursor, lc.updated_at AS cursor_updated_at
      FROM campaigns c
      LEFT JOIN ledger_stream_cursors lc ON lc.campaign_id = c.id
-     WHERE c.status IN ('active', 'funded')`
-  );
+     WHERE c.status IN ('active', 'funded')`,
+    );
 
-  const streams = dbCursors.map((row) => {
-    const live = streamRegistry.get(row.wallet_public_key) || {};
+    const streams = dbCursors.map((row) => {
+      const live = streamRegistry.get(row.wallet_public_key) || {};
+      return {
+        campaign_id: row.campaign_id,
+        wallet_public_key: row.wallet_public_key,
+        campaign_status: row.campaign_status,
+        last_cursor: row.last_cursor || null,
+        cursor_updated_at: row.cursor_updated_at || null,
+        stream_state: live.state || "not_connected",
+        stream_opened_at: live.opened_at || null,
+        last_stream_message_at: live.last_message_at || null,
+        last_stream_error: live.last_error || null,
+        reconnect_attempt:
+          live.reconnect_attempt ||
+          reconnectAttempts.get(row.wallet_public_key) ||
+          0,
+        next_reconnect_at: live.next_reconnect_at || null,
+      };
+    });
+
+    const staleMs = 15 * 60 * 1000;
+    const now = Date.now();
+    const streamsWithStale = streams.map((s) => {
+      const last = s.last_stream_message_at
+        ? new Date(s.last_stream_message_at).getTime()
+        : 0;
+      const stale =
+        s.stream_state === "connected" && last > 0 && now - last > staleMs;
+      return { ...s, stale_stream_no_messages_15m: stale };
+    });
+
     return {
-      campaign_id: row.campaign_id,
-      wallet_public_key: row.wallet_public_key,
-      campaign_status: row.campaign_status,
-      last_cursor: row.last_cursor || null,
-      cursor_updated_at: row.cursor_updated_at || null,
-      stream_state: live.state || 'not_connected',
-      stream_opened_at: live.opened_at || null,
-      last_stream_message_at: live.last_message_at || null,
-      last_stream_error: live.last_error || null,
-      reconnect_attempt:
-        live.reconnect_attempt || reconnectAttempts.get(row.wallet_public_key) || 0,
-      next_reconnect_at: live.next_reconnect_at || null,
+      active_campaigns: streamsWithStale.length,
+      streams: streamsWithStale,
     };
-  });
+  }
 
-  const staleMs = 15 * 60 * 1000;
-  const now = Date.now();
-  const streamsWithStale = streams.map((s) => {
-    const last = s.last_stream_message_at ? new Date(s.last_stream_message_at).getTime() : 0;
-    const stale =
-      s.stream_state === 'connected' && last > 0 && now - last > staleMs;
-    return { ...s, stale_stream_no_messages_15m: stale };
-  });
-
-  return {
-    active_campaigns: streamsWithStale.length,
-    streams: streamsWithStale,
+  module.exports = {
+    startLedgerMonitor,
+    watchCampaignWallet,
+    handlePayment,
+    reconcileCampaignBalances,
+    getLedgerStreamHealth,
+    addSSEClient,
+    removeSSEClient,
   };
 }
-
-module.exports = {
-  startLedgerMonitor,
-  watchCampaignWallet,
-  handlePayment,
-  reconcileCampaignBalances,
-  getLedgerStreamHealth,
-  addSSEClient,
-  removeSSEClient,
-};
