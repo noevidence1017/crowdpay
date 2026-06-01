@@ -1,5 +1,5 @@
-import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
@@ -7,29 +7,47 @@ export default function Navbar() {
   const { user, logout } = useAuth();
   const { dark, toggleTheme } = useTheme();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname]);
 
   function handleLogout() {
     logout();
     navigate('/');
   }
 
+  function closeMenu() {
+    setMenuOpen(false);
+  }
+
   return (
     <nav style={styles.nav}>
       <div className="container nav-inner-wrap">
         <Link to="/" style={styles.logo}>CrowdPay</Link>
-        <div className="nav-links">
+        <button
+          className="nav-hamburger"
+          onClick={() => setMenuOpen((v) => !v)}
+          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={menuOpen}
+        >
+          {menuOpen ? '✕' : '☰'}
+        </button>
+        <div className={`nav-links${menuOpen ? ' nav-links--open' : ''}`}>
           {user ? (
             <>
               {(user.role === 'creator' || user.role === 'admin') && (
-                <Link to="/campaigns/new" style={styles.link}>Start Campaign</Link>
+                <Link to="/campaigns/new" style={styles.link} onClick={closeMenu}>Start Campaign</Link>
               )}
-              <Link to="/dashboard" style={styles.link}>Dashboard</Link>
-              <Link to="/my-contributions" style={styles.link}>My Contributions</Link>
-              {user.role === 'admin' && <Link to="/admin" style={styles.link}>Admin</Link>}
-              <Link to="/developer" style={styles.link}>Developer</Link>
+              <Link to="/dashboard" style={styles.link} onClick={closeMenu}>Dashboard</Link>
+              <Link to="/my-contributions" style={styles.link} onClick={closeMenu}>My Contributions</Link>
+              {user.role === 'admin' && <Link to="/admin" style={styles.link} onClick={closeMenu}>Admin</Link>}
+              <Link to="/developer" style={styles.link} onClick={closeMenu}>Developer</Link>
               <span style={styles.name}>{user.name}</span>
-              <button 
-                onClick={toggleTheme} 
+              <button
+                onClick={toggleTheme}
                 style={styles.themeToggle}
                 aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
                 title={dark ? 'Light mode' : 'Dark mode'}
@@ -42,16 +60,16 @@ export default function Navbar() {
             </>
           ) : (
             <>
-              <Link to="/login" style={styles.link}>Log in</Link>
-              <button 
-                onClick={toggleTheme} 
+              <Link to="/login" style={styles.link} onClick={closeMenu}>Log in</Link>
+              <button
+                onClick={toggleTheme}
                 style={styles.themeToggle}
                 aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
                 title={dark ? 'Light mode' : 'Dark mode'}
               >
                 {dark ? '☀️' : '🌙'}
               </button>
-              <Link to="/register">
+              <Link to="/register" onClick={closeMenu}>
                 <button className="btn-primary" style={{ padding: '0.4rem 0.9rem' }}>Sign up</button>
               </Link>
             </>

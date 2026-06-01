@@ -5,10 +5,23 @@ import { useAuth } from '../context/AuthContext';
 import { markJustRegistered } from '../lib/onboarding';
 import { isConnected as isFreighterConnected, getPublicKey, requestAccess } from '@stellar/freighter-api';
 
+function passwordStrength(pw) {
+  if (!pw) return null;
+  let score = 0;
+  if (pw.length >= 8) score++;
+  if (pw.length >= 12) score++;
+  if (/[A-Z]/.test(pw)) score++;
+  if (/[0-9]/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  if (score <= 1) return { label: 'Weak', color: '#ef4444', width: '33%' };
+  if (score <= 3) return { label: 'Fair', color: '#f59e0b', width: '66%' };
+  return { label: 'Strong', color: '#10b981', width: '100%' };
+}
+
 export default function Register() {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'contributor' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '', role: 'contributor' });
   const [freighterAvailable, setFreighterAvailable] = useState(false);
   const [usingFreighter, setUsingFreighter] = useState(false);
   const [freighterPublicKey, setFreighterPublicKey] = useState('');
@@ -29,6 +42,10 @@ export default function Register() {
     }
     if (form.password.length < 8) {
       setError('Password must be at least 8 characters.');
+      return;
+    }
+    if (form.password !== form.confirmPassword) {
+      setError('Passwords do not match.');
       return;
     }
     setLoading(true);
@@ -89,7 +106,29 @@ export default function Register() {
       <form noValidate onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
         <input placeholder="Full name" value={form.name} onChange={set('name')} required />
         <input type="email" placeholder="Email" value={form.email} onChange={set('email')} required />
-        <input type="password" placeholder="Password" value={form.password} onChange={set('password')} required minLength={8} />
+        <input type="password" placeholder="Password" value={form.password} onChange={set('password')} required minLength={8} autoComplete="new-password" />
+        {form.password && (() => {
+          const s = passwordStrength(form.password);
+          return (
+            <div style={{ marginTop: '-0.4rem' }}>
+              <div style={{ height: '4px', borderRadius: '99px', background: '#e5e5e5', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: s.width, background: s.color, transition: 'width 0.2s, background 0.2s', borderRadius: '99px' }} />
+              </div>
+              <span style={{ fontSize: '0.78rem', color: s.color, fontWeight: 600 }}>{s.label}</span>
+            </div>
+          );
+        })()}
+        <div className="form-stack">
+          <label className="label-strong" htmlFor="reg-confirm">Confirm password</label>
+          <input
+            id="reg-confirm"
+            type="password"
+            value={form.confirmPassword}
+            onChange={set('confirmPassword')}
+            required
+            autoComplete="new-password"
+          />
+        </div>
         <select value={form.role} onChange={set('role')} aria-label="Account role">
           <option value="contributor">Contributor</option>
           <option value="creator">Creator</option>

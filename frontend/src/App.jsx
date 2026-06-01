@@ -16,11 +16,13 @@ import Dashboard from './pages/Dashboard';
 import NotFound from './pages/NotFound';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { ToastProvider } from './context/ToastContext';
 
 export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
+        <ToastProvider>
         <Navbar />
         <Routes>
           <Route path="/" element={<Home />} />
@@ -38,6 +40,7 @@ export default function App() {
           <Route path="/my-contributions" element={<Navigate to="/dashboard?tab=contributions" replace />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
+        </ToastProvider>
       </AuthProvider>
     </ThemeProvider>
   );
