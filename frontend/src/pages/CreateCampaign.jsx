@@ -47,6 +47,7 @@ export default function CreateCampaign() {
   const [isDragOverCover, setIsDragOverCover] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const today = new Date().toISOString().split('T')[0];
   const [showCreatorTips, setShowCreatorTips] = useState(isCreatorOnboardingVisible);
 
   useEffect(() => {
@@ -163,6 +164,16 @@ export default function CreateCampaign() {
     return true;
   }
 
+  function validateStep2() {
+    if (form.deadline && form.deadline < today) {
+      setError('Deadline must be today or in the future.');
+      return false;
+    }
+
+    setError('');
+    return true;
+  }
+
   function validateMilestones() {
     if (form.milestones.length === 0) {
       setError('');
@@ -201,7 +212,7 @@ export default function CreateCampaign() {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!validateStep1() || !validateMilestones()) return;
+    if (!validateStep1() || !validateStep2() || !validateMilestones()) return;
     setLoading(true);
     setError('');
     try {
@@ -448,6 +459,41 @@ export default function CreateCampaign() {
 
         {step === 2 && (
           <>
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: '0.75rem',
+                background: '#f8fafc',
+                border: '1px solid #d1d5db',
+                borderRadius: '12px',
+                padding: '1rem',
+                marginBottom: '1rem',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setError('');
+                  setStep(1);
+                }}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--color-accent)',
+                  padding: 0,
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                }}
+              >
+                ← Edit
+              </button>
+              <span style={{ fontWeight: 700 }}>{form.title || 'Untitled campaign'}</span>
+              <span style={{ color: 'var(--color-text-muted)' }}>
+                Goal: {form.target_amount || '—'} {form.asset_type || ''}
+              </span>
+            </div>
             <div className="form-stack">
               <label className="label-strong" htmlFor="cc-desc">
                 Description <span style={{ fontWeight: 500, color: 'var(--color-text-muted)' }}>(optional)</span>
@@ -501,7 +547,7 @@ export default function CreateCampaign() {
               <label className="label-strong" htmlFor="cc-deadline">
                 Deadline <span style={{ fontWeight: 500, color: 'var(--color-text-muted)' }}>(optional)</span>
               </label>
-              <input id="cc-deadline" type="date" value={form.deadline} onChange={setField('deadline')} />
+              <input id="cc-deadline" type="date" min={today} value={form.deadline} onChange={setField('deadline')} />
             </div>
 
             <div className="form-stack" style={{ marginTop: '1.25rem', flexDirection: 'row', alignItems: 'center', gap: '0.5rem' }}>
@@ -520,13 +566,6 @@ export default function CreateCampaign() {
               If unchecked, backers will be listed but their individual amounts will be hidden from the public.
             </p>
 
-            <div className="alert alert--info" style={{ marginTop: '1.25rem' }} role="status">
-              <strong>Summary:</strong> Goal of {form.target_amount || '—'} {form.asset_type}
-              {form.min_contribution && ` (Min: ${form.min_contribution} ${form.asset_type})`}
-              {form.max_contribution && ` (Max: ${form.max_contribution} ${form.asset_type})`} — “{form.title || 'Untitled'}”.
-              A multisig campaign wallet will be created when you launch.
-            </div>
-
             {error && (
               <p className="alert alert--error" style={{ marginTop: '1rem' }} role="alert">
                 {error}
@@ -534,7 +573,14 @@ export default function CreateCampaign() {
             )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', marginTop: '1.25rem' }}>
-              <button type="button" className="btn-primary" style={{ width: '100%' }} onClick={() => setStep(3)}>
+              <button
+                type="button"
+                className="btn-primary"
+                style={{ width: '100%' }}
+                onClick={() => {
+                  if (validateStep2()) setStep(3);
+                }}
+              >
                 Continue to milestones
               </button>
               <button

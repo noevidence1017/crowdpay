@@ -687,6 +687,23 @@ router.post('/', requireAuth, requireRole('creator', 'admin'), createCampaignVal
    */
   const { title, description, target_amount, asset_type, deadline, milestones, min_contribution, max_contribution } = req.body;
 
+  if (deadline) {
+    const [year, month, day] = String(deadline).split('-').map(Number);
+    const deadlineDate = new Date(year, month - 1, day);
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+
+    if (
+      Number.isNaN(deadlineDate.getTime()) ||
+      deadlineDate.getFullYear() !== year ||
+      deadlineDate.getMonth() + 1 !== month ||
+      deadlineDate.getDate() !== day ||
+      deadlineDate < todayDate
+    ) {
+      return res.status(400).json({ error: 'deadline must be a future date' });
+    }
+  }
+
   let normalizedMilestones;
   try {
     normalizedMilestones = normalizeMilestonesInput(milestones);
