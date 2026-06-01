@@ -3,7 +3,8 @@ import { Link, useParams, useLocation } from "react-router-dom";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import ContributeModal from "../components/ContributeModal";
-import DisputeModal from "../components/DisputeModal";
+import DisputeModal from "../components/DisputeModal"
+import TransactionHistory from "../components/TransactionHistory";
 import MilestoneTracker from "../components/MilestoneTracker";
 import WithdrawalsSection from "../components/WithdrawalsSection";
 import CampaignDetailSkeleton from "../components/skeletons/CampaignDetailSkeleton";
@@ -942,11 +943,15 @@ export default function Campaign() {
         </div>
       )}
 
+      <TransactionHistory
+        campaignId={campaign.id}
+        isCreator={!!(user?.id && campaign.creator_id === user.id)}
+      />
+
       <MilestoneTracker
         milestones={milestones}
         assetType={campaign.asset_type}
       />
-
       {isOwner && (
         <div style={{ marginBottom: "2rem" }}>
           <h2 style={styles.sectionTitle}>Team Management</h2>
@@ -1328,7 +1333,7 @@ export default function Campaign() {
             </div>
           )}
         </>
-      )}}
+      )}
 
       {showModal && (
         <ContributeModal
