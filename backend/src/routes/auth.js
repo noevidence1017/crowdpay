@@ -304,7 +304,7 @@ router.post('/register', registerLimiter, registerValidation, validateRequest, a
     });
   });
 
-  res.status(201).json({ user });
+  res.status(201).json({ token: accessToken, user });
 });
 
 router.post('/login', loginLimiter, loginValidation, validateRequest, async (req, res) => {
@@ -387,6 +387,7 @@ router.post('/login', loginLimiter, loginValidation, validateRequest, async (req
   setAccessTokenCookie(res, accessToken);
 
   res.json({
+    token: accessToken,
     user: {
       id: user.id,
       email: user.email,

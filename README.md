@@ -183,10 +183,20 @@ Creator identity verification is enforced by default before campaign launch. For
 ### 3. Set up the database
 
 ```bash
-psql -U postgres -c "CREATE DATABASE crowdpay;"
-psql -U postgres -d crowdpay -f db/schema.sql
-# For existing deployments, apply migration files in backend/db/migrations in order.
+cd backend
+
+# First-time setup: create DB and apply all migrations
+npm run migrate:fresh
+
+# After pulling new migrations from main branch
+npm run migrate
 ```
+
+The migration runner automatically:
+- Creates the database schema from `db/schema.sql`
+- Applies migration files in `db/migrations` in chronological order
+- Tracks applied migrations to prevent duplicates
+- Rolls back cleanly on error
 
 ### 4. Fund your platform account on testnet
 
