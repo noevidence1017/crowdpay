@@ -85,6 +85,7 @@ export default function Campaign() {
   const [editError, setEditError] = useState("");
   const [editSuccess, setEditSuccess] = useState("");
   const [editLoading, setEditLoading] = useState(false);
+  const [analytics, setAnalytics] = useState(null);
 
   useEffect(() => {
     setLoadError("");
@@ -121,6 +122,10 @@ export default function Campaign() {
       .getCampaignUpdates(id, { limit: 20 })
       .then(setUpdates)
       .catch(() => setUpdates([]));
+    api
+      .getCampaignAnalytics(id)
+      .then(setAnalytics)
+      .catch(() => setAnalytics(null));
   }, [id, token, contributed, showAll]);
 
   useEffect(() => {
@@ -1179,6 +1184,57 @@ export default function Campaign() {
               />
             </article>
           ))}
+        </div>
+      )}
+
+      {/* Analytics Section */}
+      {analytics && (
+        <div style={{ marginBottom: "2rem" }}>
+          <h2 style={styles.sectionTitle}>Analytics</h2>
+          {!analytics.dailyTotals || analytics.dailyTotals.length === 0 ? (
+            <p style={{ color: "var(--color-text-muted)" }}>No analytics data available yet.</p>
+          ) : (
+            <div style={{ display: "grid", gap: "1.5rem" }}>
+              <div className="campaign-card">
+                <strong style={{ display: "block", marginBottom: "1rem" }}>Contributions (Last 30 Days)</strong>
+                <svg width="100%" height={150} viewBox={`0 0 600 150`} preserveAspectRatio="none">
+                  {analytics.dailyTotals.map((day, i) => {
+                    const maxAmount = Math.max(...analytics.dailyTotals.map(d => Number(d.total_amount) || 0), 1);
+                    const barWidth = 600 / Math.max(analytics.dailyTotals.length, 1);
+                    const barHeight = Math.max(5, (Number(day.total_amount) / maxAmount) * 150);
+                    const y = 150 - barHeight;
+                    const x = i * barWidth;
+                    return (
+                      <g key={i}>
+                        <title>{`${new Date(day.day).toLocaleDateString()}: ${day.total_amount} ${day.asset}`}</title>
+                        <rect x={x} y={y} width={Math.max(barWidth - 2, 2)} height={barHeight} fill="var(--color-accent)" rx="2" />
+                      </g>
+                    );
+                  })}
+                </svg>
+              </div>
+
+              <div className="campaign-card">
+                <strong style={{ display: "block", marginBottom: "1rem" }}>Asset Breakdown</strong>
+                {analytics.assetBreakdown.map(asset => (
+                  <div key={asset.paid_with} style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+                    <span>{asset.paid_with}</span>
+                    <strong>{asset.total_sent}</strong>
+                  </div>
+                ))}
+              </div>
+
+              <div className="campaign-card">
+                <strong style={{ display: "block", marginBottom: "1rem" }}>Top Contributors</strong>
+                {analytics.topContributors.map((c, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem", fontFamily: "monospace" }}>
+                    <span>{c.sender_public_key.slice(0, 4)}...{c.sender_public_key.slice(-4)}</span>
+                    <span>{c.total} ({c.times} contributions)</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

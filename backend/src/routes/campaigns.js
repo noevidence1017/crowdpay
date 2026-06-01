@@ -1138,4 +1138,41 @@ router.post('/:id/members/accept', requireAuth, asyncHandler(async (req, res) =>
   res.json(rows[0]);
 }));
 
+// GET /campaigns/:id/analytics — campaign analytics
+router.get('/:id/analytics', asyncHandler(async (req, res) => {
+  const { rows: dailyTotals } = await db.query(`
+    SELECT
+      DATE(created_at) AS day,
+      COUNT(*)          AS contribution_count,
+      SUM(amount)       AS total_amount,
+      asset
+    FROM contributions
+    WHERE campaign_id = $1
+      AND created_at >= NOW() - INTERVAL '30 days'
+    GROUP BY DATE(created_at), asset
+    ORDER BY day ASC
+  `, [req.params.id]);
+
+  const { rows: assetBreakdown } = await db.query(`
+    SELECT
+      COALESCE(source_asset, asset) AS paid_with,
+      COUNT(*)      AS count,
+      SUM(COALESCE(source_amount, amount)) AS total_sent
+    FROM contributions
+    WHERE campaign_id = $1
+    GROUP BY paid_with
+  `, [req.params.id]);
+
+  const { rows: topContributors } = await db.query(`
+    SELECT sender_public_key, SUM(amount) AS total, COUNT(*) AS times
+    FROM contributions
+    WHERE campaign_id = $1
+    GROUP BY sender_public_key
+    ORDER BY total DESC
+    LIMIT 5
+  `, [req.params.id]);
+
+  res.json({ dailyTotals, assetBreakdown, topContributors });
+}));
+
 module.exports = router;
