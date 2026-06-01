@@ -10,6 +10,7 @@ import CampaignDetailSkeleton from "../components/skeletons/CampaignDetailSkelet
 import ContributionListSkeleton from "../components/skeletons/ContributionListSkeleton";
 import VerificationBadge from "../components/VerificationBadge";
 import CampaignStatusBadge from "../components/CampaignStatusBadge";
+import CampaignQRCode from "../components/CampaignQRCode";
 
 function escapeHtml(text) {
   return text
@@ -73,6 +74,7 @@ export default function Campaign() {
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteError, setInviteError] = useState("");
   const [inviteSuccess, setInviteSuccess] = useState(false);
+  const [showQR, setShowQR] = useState(false);
   const [showEmbedSection, setShowEmbedSection] = useState(false);
   const [embedCopied, setEmbedCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -759,6 +761,17 @@ export default function Campaign() {
       <div style={styles.walletInfo}>
         <span style={styles.walletLabel}>Campaign wallet</span>
         <code style={styles.walletKey}>{campaign.wallet_public_key}</code>
+      </div>
+
+      <div style={{ marginBottom: '1.75rem' }}>
+        <button type="button" className="btn-secondary" onClick={() => setShowQR((v) => !v)}>
+          {showQR ? 'Hide QR code' : 'Show QR code'}
+        </button>
+        {showQR && (
+          <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'center' }}>
+            <CampaignQRCode url={`${window.location.origin}/campaigns/${id}`} size={200} />
+          </div>
+        )}
       </div>
 
       {/* Report a problem — visible to contributors who have backed this campaign */}
