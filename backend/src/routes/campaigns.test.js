@@ -314,3 +314,206 @@ test('GET /api/campaigns supports search, asset filter, and sort', async () => {
   assert.ok(listQuery.params.includes('%solar%'));
   assert.ok(listQuery.params.includes('USDC'));
 });
+
+// Campaign Webhooks Tests
+
+test('POST /api/campaigns/:id/webhooks registers a campaign webhook', async () => {
+  const app = buildApp({
+    authUser: { userId: 'creator-1', role: 'creator' },
+    queryImpl: async (text) => {
+      if (text.includes('SELECT id FROM campaigns WHERE id = $1')) {
+        return { rows: [{ id: 'campaign-1' }] };
+      }
+      if (text.includes('SELECT creator_id FROM campaigns')) {
+        return { rows: [{ creator_id: 'creator-1' }] };
+      }
+      if (text.includes('COUNT(*)')) {
+        return { rows: [{ count: 2 }] };
+      }
+      if (text.includes('INSERT INTO campaign_webhooks')) {
+        return {
+          rows: [{
+            id: 'wh-1',
+            campaign_id: 'campaign-1',
+            url: 'https://example.com/webhook',
+            events: ['contribution.indexed'],
+            created_at: '2026-06-02T00:00:00Z'
+          }]
+        };
+      }
+      return { rows: [] };
+    },
+  });
+
+  const response = await request(app)
+    .post('/api/campaigns/campaign-1/webhooks')
+    .set('Authorization', 'Bearer token')
+    .send({
+      url: 'https://example.com/webhook',
+      events: ['contribution.indexed']
+    });
+
+  assert.equal(response.status, 201);
+  assert.equal(response.body.id, 'wh-1');
+  assert.equal(response.body.url, 'https://example.com/webhook');
+  assert.ok(response.body.secret);
+  assert.ok(response.body.message.includes('Store the signing secret'));
+});
+
+test('POST /api/campaigns/:id/webhooks rejects invalid URLs', async () => {
+  const app = buildApp({
+    authUser: { userId: 'creator-1', role: 'creator' },
+    queryImpl: async (text) => {
+      if (text.includes('SELECT id FROM campaigns WHERE id = $1')) {
+        return { rows: [{ id: 'campaign-1' }] };
+      }
+      if (text.includes('SELECT creator_id FROM campaigns')) {
+        return { rows: [{ creator_id: 'creator-1' }] };
+      }
+      return { rows: [] };
+    },
+  });
+
+  const response = await request(app)
+    .post('/api/campaigns/campaign-1/webhooks')
+    .set('Authorization', 'Bearer token')
+    .send({ url: 'http://example.com' }); // HTTP, not HTTPS
+
+  assert.equal(response.status, 400);
+  assert.match(response.body.error, /https/i);
+});
+
+test('POST /api/campaigns/:id/webhooks enforces 5 webhook limit', async () => {
+  const app = buildApp({
+    authUser: { userId: 'creator-1', role: 'creator' },
+    queryImpl: async (text) => {
+      if (text.includes('SELECT id FROM campaigns WHERE id = $1')) {
+        return { rows: [{ id: 'campaign-1' }] };
+      }
+      if (text.includes('SELECT creator_id FROM campaigns')) {
+        return { rows: [{ creator_id: 'creator-1' }] };
+      }
+      if (text.includes('COUNT(*)')) {
+        return { rows: [{ count: 5 }] }; // Already at limit
+      }
+      return { rows: [] };
+    },
+  });
+
+  const response = await request(app)
+    .post('/api/campaigns/campaign-1/webhooks')
+    .set('Authorization', 'Bearer token')
+    .send({ url: 'https://example.com/webhook' });
+
+  assert.equal(response.status, 429);
+  assert.match(response.body.error, /limit/i);
+});
+
+test('GET /api/campaigns/:id/webhooks lists webhooks for campaign', async () => {
+  const app = buildApp({
+    authUser: { userId: 'creator-1', role: 'creator' },
+    queryImpl: async (text) => {
+      if (text.includes('SELECT id FROM campaigns WHERE id = $1')) {
+        return { rows: [{ id: 'campaign-1' }] };
+      }
+      if (text.includes('SELECT creator_id FROM campaigns')) {
+        return { rows: [{ creator_id: 'creator-1' }] };
+      }
+      if (text.includes('SELECT id, url, events, active')) {
+        return {
+          rows: [{
+            id: 'wh-1',
+            url: 'https://example.com/webhook',
+            events: ['contribution.indexed'],
+            active: true,
+            created_at: '2026-06-02T00:00:00Z',
+            secret_hint: '1234567890…cdef'
+          }]
+        };
+      }
+      return { rows: [] };
+    },
+  });
+
+  const response = await request(app)
+    .get('/api/campaigns/campaign-1/webhooks')
+    .set('Authorization', 'Bearer token');
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.length, 1);
+  assert.equal(response.body[0].id, 'wh-1');
+  assert.ok(response.body[0].secret_hint.includes('…'));
+});
+
+test('DELETE /api/campaigns/:id/webhooks/:wid disables a webhook', async () => {
+  const app = buildApp({
+    authUser: { userId: 'creator-1', role: 'creator' },
+    queryImpl: async (text) => {
+      if (text.includes('SELECT id FROM campaigns WHERE id = $1')) {
+        return { rows: [{ id: 'campaign-1' }] };
+      }
+      if (text.includes('SELECT creator_id FROM campaigns')) {
+        return { rows: [{ creator_id: 'creator-1' }] };
+      }
+      if (text.includes('UPDATE campaign_webhooks')) {
+        return { rows: [{ id: 'wh-1' }] };
+      }
+      return { rows: [] };
+    },
+  });
+
+  const response = await request(app)
+    .delete('/api/campaigns/campaign-1/webhooks/wh-1')
+    .set('Authorization', 'Bearer token');
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.revoked, true);
+  assert.equal(response.body.id, 'wh-1');
+});
+
+test('GET /api/campaigns/:id/webhooks/:wid/deliveries shows delivery history', async () => {
+  const app = buildApp({
+    authUser: { userId: 'creator-1', role: 'creator' },
+    queryImpl: async (text, params) => {
+      if (text.includes('SELECT id FROM campaigns WHERE id = $1')) {
+        return { rows: [{ id: 'campaign-1' }] };
+      }
+      if (text.includes('SELECT creator_id FROM campaigns')) {
+        return { rows: [{ creator_id: 'creator-1' }] };
+      }
+      if (text.includes('SELECT id FROM campaign_webhooks')) {
+        return { rows: [{ id: 'wh-1' }] };
+      }
+      if (text.includes('COUNT(*)')) {
+        return { rows: [{ total: 1 }] };
+      }
+      if (text.includes('SELECT id, event, status')) {
+        return {
+          rows: [{
+            id: 'del-1',
+            event: 'contribution.indexed',
+            status: 'delivered',
+            response_status: 200,
+            attempt_count: 1,
+            last_error: null,
+            delivered_at: '2026-06-02T10:30:00Z',
+            failed_at: null,
+            created_at: '2026-06-02T10:29:00Z',
+            updated_at: '2026-06-02T10:30:00Z'
+          }]
+        };
+      }
+      return { rows: [] };
+    },
+  });
+
+  const response = await request(app)
+    .get('/api/campaigns/campaign-1/webhooks/wh-1/deliveries')
+    .set('Authorization', 'Bearer token');
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.total, 1);
+  assert.equal(response.body.deliveries.length, 1);
+  assert.equal(response.body.deliveries[0].status, 'delivered');
+  assert.equal(response.body.deliveries[0].response_status, 200);
+});
