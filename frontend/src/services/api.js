@@ -281,26 +281,6 @@ export const api = {
   initiateRefund: (id) => request('POST', `/campaigns/${id}/refund/initiate`, {}),
   approveRefundCreator: (id, body) => request('POST', `/campaigns/${id}/refund/approve/creator`, body || {}),
   approveRefundPlatform: (id) => request('POST', `/campaigns/${id}/refund/approve/platform`, {}),
-    request("GET", `/contributions/finalization/${txHash}`),
-
-  getMilestones: (campaignId) =>
-    request("GET", `/campaigns/${campaignId}/milestones`),
-  setCampaignMilestones: (campaignId, milestones) =>
-    request("POST", `/campaigns/${campaignId}/milestones`, { milestones }),
-  submitMilestoneEvidence: (id, body) =>
-    request("POST", `/milestones/${id}/submit`, body),
-  approveMilestone: (id, body) =>
-    request("POST", `/milestones/${id}/release`, body || {}),
-  rejectMilestone: (id, body) =>
-    request("POST", `/milestones/${id}/reject`, body || {}),
-
-  getAnchorInfo: () => request("GET", "/anchor/info"),
-  startAnchorDeposit: (body) => request("POST", "/anchor/deposits/start", body),
-  getAnchorDepositStatus: (id) => request("GET", `/anchor/deposits/${id}`),
-
-  failExpiredCampaigns: () => request("POST", "/campaigns/cron/fail-expired"),
-  triggerCampaignRefunds: (campaignId) =>
-    request("POST", `/campaigns/${campaignId}/trigger-refunds`),
 
   getWithdrawalCapabilities: () => request("GET", "/withdrawals/capabilities"),
   listWithdrawals: (campaignId) =>

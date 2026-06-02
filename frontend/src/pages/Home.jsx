@@ -70,7 +70,6 @@ export default function Home() {
     setFilters({ sort: newSort });
   };
   const category = searchParams.get('category') || '';
-  const sort = searchParams.get('sort') || 'newest';
 
   const hasActiveFilters =
     Boolean(search.trim()) || Boolean(asset) || Boolean(status) || Boolean(category) || sort !== 'newest';

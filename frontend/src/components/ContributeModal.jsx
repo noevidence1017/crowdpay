@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   getNetwork,
   isConnected as isFreighterConnected,
@@ -8,7 +8,6 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import { stellarExpertTxUrl } from '../config/stellar';
-import { isConnected, getPublicKey, signTransaction } from '@stellar/freighter-api';
 
 const SEND_OPTIONS = [
   { value: 'XLM', label: 'XLM', hint: 'Native Stellar' },
@@ -44,11 +43,11 @@ function friendlyFreighterError(err, fallback) {
   return fallback;
 }
 
-export default function ContributeModal({ campaign, onClose, onSuccess, guestFreighterMode = false }) {
+export default function ContributeModal({ campaign, onClose, onSuccess }) {
   const { token } = useAuth();
   const [amount, setAmount] = useState('');
   const [sendAsset, setSendAsset] = useState(campaign.asset_type);
-  const [paymentMethod, setPaymentMethod] = useState(guestFreighterMode ? 'freighter' : 'custodial');
+  const [paymentMethod, setPaymentMethod] = useState('custodial');
   const [anchorInfo, setAnchorInfo] = useState({ anchors: [] });
   const [selectedAnchorId, setSelectedAnchorId] = useState('');
   const [anchorSession, setAnchorSession] = useState(null);
@@ -71,12 +70,10 @@ export default function ContributeModal({ campaign, onClose, onSuccess, guestFre
   const [displayName, setDisplayName] = useState('');
   const anchorPopupRef = useRef(null);
 
-  const modalRef = useRef(null);
-
   useEffect(() => {
     if (campaign?.id) {
       api.getContributions(campaign.id)
-        .then((data) => setExistingContributions(data?.contributions || []))
+        .then(setExistingContributions)
         .catch(() => setExistingContributions([]));
     }
   }, [campaign?.id]);
@@ -86,26 +83,6 @@ export default function ContributeModal({ campaign, onClose, onSuccess, guestFre
     paymentMethod === 'anchor' ? selectedAnchor?.asset?.code || campaign.asset_type : sendAsset;
   const isPathPayment = effectiveSendAsset !== campaign.asset_type;
   const destAmount = amount.trim();
-  const effectiveSendAsset = paymentMethod === 'anchor' ? selectedAnchorId
-    ? anchorInfo.anchors.find((a) => a.id === selectedAnchorId)?.asset?.code
-    : undefined
-    : sendAsset;
-  const selectedAnchor = anchorInfo.anchors.find((a) => a.id === selectedAnchorId) || null;
-
-  // Fetch anchor info and existing contributions on mount
-  useEffect(() => {
-    api.getAnchorInfo().then(setAnchorInfo).catch(() => {});
-    api.getContributions(campaign.id, { limit: 100 }).then((d) => setExistingContributions(d.contributions || [])).catch(() => {});
-  }, [campaign.id]);
-
-  // Check Freighter availability
-  useEffect(() => {
-    isConnected().then((res) => {
-      const connected = res?.isConnected ?? res;
-      setFreighterAvailable(!!connected);
-      setFreighterChecked(true);
-    }).catch(() => setFreighterChecked(true));
-  }, []);
 
   const fetchQuote = useCallback(async () => {
     if (!isPathPayment || !effectiveSendAsset || !destAmount || Number(destAmount) <= 0) {
@@ -247,34 +224,6 @@ export default function ContributeModal({ campaign, onClose, onSuccess, guestFre
     };
   }, [anchorSession?.id, onSuccess, phase, token]);
 
-  useEffect(() => {
-    const modal = modalRef.current;
-    if (!modal) return;
-    const focusable = modal.querySelectorAll(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    );
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    first?.focus();
-
-    function trapTab(e) {
-      if (e.key !== 'Tab') return;
-      if (e.shiftKey) {
-        if (document.activeElement === first) {
-          e.preventDefault();
-          last?.focus();
-        }
-      } else {
-        if (document.activeElement === last) {
-          e.preventDefault();
-          first?.focus();
-        }
-      }
-    }
-    modal.addEventListener('keydown', trapTab);
-    return () => modal.removeEventListener('keydown', trapTab);
-  }, [phase]);
-
   async function submitWithCustodial() {
     setLoadingLabel('Submitting with CrowdPay wallet…');
     return api.contribute(
@@ -295,7 +244,7 @@ export default function ContributeModal({ campaign, onClose, onSuccess, guestFre
     }
 
     setLoadingLabel('Preparing transaction…');
-    const prepared = await api.prepareContribution(
+    const prepared = await api.prepareFreighterContribution(
       {
         campaign_id: campaign.id,
         amount: destAmount,
@@ -364,56 +313,6 @@ export default function ContributeModal({ campaign, onClose, onSuccess, guestFre
 
     setAnchorSession(session);
     setPhase('anchor');
-    return api.contribute({
-      campaign_id: campaign.id,
-      amount: destAmount,
-      send_asset: effectiveSendAsset,
-      display_name: displayName || undefined,
-    });
-  }
-
-  async function submitWithFreighter() {
-    const connected = await isConnected().then((r) => r?.isConnected ?? r).catch(() => false);
-    if (!connected) throw new Error('Freighter is not installed or not connected.');
-
-    const pkResult = await getPublicKey();
-    const senderPublicKey = pkResult?.publicKey ?? pkResult;
-    if (!senderPublicKey) throw new Error('Could not get public key from Freighter.');
-
-    setLoadingLabel('Building transaction…');
-    const { unsigned_xdr, network_name } = await api.buildContributionXdr({
-      campaign_id: campaign.id,
-      amount: destAmount,
-      send_asset: effectiveSendAsset,
-      sender_public_key: senderPublicKey,
-    });
-
-    setLoadingLabel('Waiting for Freighter signature…');
-    const signResult = await signTransaction(unsigned_xdr, { network: network_name });
-    const signedXdr = signResult?.signedTransaction ?? signResult;
-    if (!signedXdr) throw new Error('Freighter did not return a signed transaction.');
-
-    setLoadingLabel('Submitting…');
-    return api.guestContribute({
-      campaign_id: campaign.id,
-      sender_public_key: senderPublicKey,
-      signed_xdr: signedXdr,
-      unsigned_xdr,
-    });
-  }
-
-  async function submitWithAnchor() {
-    if (!selectedAnchorId) throw new Error('Please select a deposit partner.');
-    const session = await api.startAnchorDeposit({
-      campaign_id: campaign.id,
-      amount: destAmount,
-      anchor_id: selectedAnchorId,
-    });
-    setAnchorSession(session);
-    setPhase('anchor');
-    if (session.interactive_url) {
-      anchorPopupRef.current = window.open(session.interactive_url, '_blank', 'noopener,noreferrer,width=600,height=700');
-    }
   }
 
   async function handleSubmit(e) {
@@ -425,25 +324,19 @@ export default function ContributeModal({ campaign, onClose, onSuccess, guestFre
 
     const amountNum = Number(destAmount);
     if (campaign.min_contribution && amountNum < Number(campaign.min_contribution)) {
-      setError(`Minimum contribution is ${campaign.min_contribution} ${campaign.asset_type}`);
+      setError(`Contribution amount is below the minimum limit of ${campaign.min_contribution} ${campaign.asset_type}.`);
       return;
     }
-    if (campaign.max_contribution && amountNum > Number(campaign.max_contribution)) {
-      setError(`Maximum contribution is ${campaign.max_contribution} ${campaign.asset_type}`);
-      return;
-    }
-    if (campaign.max_per_user) {
-      const existingSum = user?.wallet_public_key
-        ? existingContributions
-            .filter((c) => c.sender_public_key === user.wallet_public_key)
-            .reduce((sum, c) => sum + Number(c.amount), 0)
-        : 0;
-      if (existingSum + amountNum > Number(campaign.max_per_user)) {
-        setError(`You have already contributed ${existingSum} ${campaign.asset_type}. The per-contributor limit is ${campaign.max_per_user}.`);
+    if (campaign.max_contribution) {
+      const existingSum = existingContributions
+        .filter((c) => c.sender_public_key === user?.wallet_public_key)
+        .reduce((sum, c) => sum + Number(c.amount), 0);
+
+      if (existingSum + amountNum > Number(campaign.max_contribution)) {
+        setError(`Contribution violates the maximum limit of ${campaign.max_contribution} ${campaign.asset_type} per backer.`);
         return;
       }
     }
-
     setLoading(true);
     setLoadingLabel('Submitting…');
     setError('');
@@ -514,7 +407,6 @@ export default function ContributeModal({ campaign, onClose, onSuccess, guestFre
     <div className="modal-overlay" style={styles.overlay} onClick={handleClose} role="presentation">
       <div
         className="modal-shell"
-        ref={modalRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="contribute-title"
@@ -536,7 +428,6 @@ export default function ContributeModal({ campaign, onClose, onSuccess, guestFre
                   Payment method
                 </legend>
                 <div className="asset-picker" role="radiogroup" aria-label="Contribution payment method">
-                  {!guestFreighterMode && (
                   <label
                     className={`asset-picker__option${paymentMethod === 'custodial' ? ' asset-picker__option--selected' : ''}`}
                   >
@@ -550,8 +441,7 @@ export default function ContributeModal({ campaign, onClose, onSuccess, guestFre
                     <div className="asset-picker__code">CrowdPay wallet</div>
                     <div className="asset-picker__hint">Uses your existing custodial balance</div>
                   </label>
-                  )}
-                  {(freighterAvailable || guestFreighterMode) && (
+                  {freighterAvailable && (
                     <label
                       className={`asset-picker__option${paymentMethod === 'freighter' ? ' asset-picker__option--selected' : ''}`}
                     >
@@ -582,11 +472,9 @@ export default function ContributeModal({ campaign, onClose, onSuccess, guestFre
                     </label>
                   )}
                 </div>
-                {freighterChecked && !freighterAvailable && (paymentMethod === 'freighter' || guestFreighterMode) && (
+                {freighterChecked && !freighterAvailable && (
                   <span id="contrib-wallet-help" style={styles.help}>
-                    Freighter extension not detected.{' '}
-                    <a href="https://www.freighter.app/" target="_blank" rel="noopener noreferrer">Install Freighter</a>{' '}
-                    to contribute from your own Stellar wallet.
+                    Freighter extension not detected. Install it to contribute from your own Stellar wallet.
                   </span>
                 )}
               </fieldset>
@@ -669,36 +557,22 @@ export default function ContributeModal({ campaign, onClose, onSuccess, guestFre
                   aria-describedby="contrib-amount-help"
                 />
                 <span id="contrib-amount-help" style={styles.help}>
-                  <span style={{ display: 'block', marginBottom: '0.25rem' }}>
-                    This is the credited amount toward the campaign goal, in {campaign.asset_type}.
-                  </span>
-                  {(campaign.min_contribution || campaign.max_contribution || campaign.max_per_user) && (
-                    <span style={{ display: 'block', marginTop: '0.35rem', borderTop: '1px dashed var(--color-border-lighter)', paddingTop: '0.35rem' }}>
-                      <strong>Limits for this campaign:</strong>
-                      <ul style={{ margin: '0.25rem 0 0', paddingLeft: '1rem', listStyleType: 'disc' }}>
-                        {campaign.min_contribution && (
-                          <li>Minimum per contribution: {Number(campaign.min_contribution).toLocaleString()} {campaign.asset_type}</li>
-                        )}
-                        {campaign.max_contribution && (
-                          <li>Maximum per contribution: {Number(campaign.max_contribution).toLocaleString()} {campaign.asset_type}</li>
-                        )}
-                        {campaign.max_per_user && (() => {
-                          const existingSum = user?.wallet_public_key
-                            ? existingContributions
-                                .filter((c) => c.sender_public_key === user.wallet_public_key)
-                                .reduce((sum, c) => sum + Number(c.amount), 0)
-                            : 0;
-                          const remaining = Math.max(0, Number(campaign.max_per_user) - existingSum);
-                          return (
-                            <li>
-                              Per-contributor limit: {Number(campaign.max_per_user).toLocaleString()} {campaign.asset_type}
-                              {existingSum > 0 && ` (You have contributed ${existingSum.toLocaleString()} ${campaign.asset_type}; ${remaining.toLocaleString()} remaining)`}
-                            </li>
-                          );
-                        })()}
-                      </ul>
-                    </span>
-                  )}
+                  This is the credited amount toward the campaign goal, in {campaign.asset_type}.
+                  {(() => {
+                    if (!campaign.max_contribution) return null;
+                    const existingSum = existingContributions
+                      .filter((c) => c.sender_public_key === user?.wallet_public_key)
+                      .reduce((sum, c) => sum + Number(c.amount), 0);
+                    if (existingSum > 0) {
+                      const remaining = Math.max(0, Number(campaign.max_contribution) - existingSum);
+                      return (
+                        <span style={{ display: 'block', marginTop: '0.25rem', color: 'var(--color-accent)', fontWeight: 600 }}>
+                          You can contribute up to {remaining.toLocaleString()} {campaign.asset_type} more.
+                        </span>
+                      );
+                    }
+                    return null;
+                  })()}
                 </span>
               </div>
 

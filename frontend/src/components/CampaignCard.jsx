@@ -83,6 +83,8 @@ export default function CampaignCard({ campaign, featured }) {
             {campaign.recentContributions > 0 && (
               <span style={styles.trending}>
                 {campaign.recentContributions} contribution{campaign.recentContributions > 1 ? 's' : ''} in 48h
+              </span>
+            )}
             {campaign.category && (
               <span style={styles.categoryBadge}>
                 {CATEGORY_LABELS[campaign.category] || campaign.category}
