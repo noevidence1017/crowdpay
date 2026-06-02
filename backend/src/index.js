@@ -1,6 +1,14 @@
 require('dotenv').config();
 require('./config/env').validateEnv();
 
+const Sentry = require('@sentry/node');
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  environment: process.env.NODE_ENV || 'development',
+  tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.2 : 1.0,
+  enabled: !!process.env.SENTRY_DSN,
+});
+
 const path = require('path');
 const express = require('express');
 const cors = require('cors');
@@ -29,6 +37,8 @@ app.use(
 );
 app.use(express.json({ limit: '50kb' }));
 app.use(cookieParser());
+app.use(Sentry.Handlers.requestHandler());
+app.use(Sentry.Handlers.tracingHandler());
 app.use(requestIdMiddleware);
 app.use(requestLogger);
 app.use(normalizeErrorResponse);
@@ -117,6 +127,7 @@ if (process.env.SERVE_FRONTEND === 'true') {
   });
 }
 
+app.use(Sentry.Handlers.errorHandler());
 app.use(errorHandler);
 
 const { startWebhookRetryPoller } = require('./services/webhookDispatcher');

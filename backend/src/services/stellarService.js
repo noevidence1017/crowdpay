@@ -23,6 +23,8 @@ const {
   USDC,
   isTestnet,
   configuredAssets,
+} = require('../config/stellar');
+const Sentry = require('@sentry/node');
 } = require("../config/stellar");
 
 const PLATFORM_KEYPAIR = Keypair.fromSecret(process.env.PLATFORM_SECRET_KEY);
@@ -532,8 +534,17 @@ async function submitWithFeeBumpFallback(innerXdr) {
 
 async function submitPreparedTransaction(xdr) {
   const tx = TransactionBuilder.fromXDR(xdr, networkPassphrase);
-  const result = await server.submitTransaction(tx);
-  return result.hash;
+  try {
+    const result = await server.submitTransaction(tx);
+    return result.hash;
+  } catch (err) {
+    Sentry.withScope((scope) => {
+      scope.setTag('stellar.network', process.env.STELLAR_NETWORK);
+      scope.setExtra('tx_hash', tx.hash().toString('hex'));
+      Sentry.captureException(err);
+    });
+    throw err;
+  }
 }
 
 async function submitSignedWithdrawal({ xdr }) {
