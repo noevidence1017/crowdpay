@@ -198,6 +198,7 @@ export const api = {
     startKyc: () => request('POST', '/users/me/kyc/start'),
 
   getCampaigns: (options = {}) => request('GET', '/campaigns', null, { query: options }),
+  getCampaignCategories: () => request('GET', '/campaigns/categories'),
   getCampaign: (id) => request('GET', `/campaigns/${id}`),
   getCampaignAnalytics: (id) => request('GET', `/campaigns/${id}/analytics`),
   getCampaignEmbed: (id) => request('GET', `/campaigns/${id}/embed`),

@@ -53,4 +53,14 @@ describe('CampaignCard', () => {
     renderCard({ ...baseCampaign, status: 'failed' });
     expect(screen.getByText('Campaign ended')).toBeInTheDocument();
   });
+
+  it('shows category chip when category is present', () => {
+    renderCard({ ...baseCampaign, category: 'technology' });
+    expect(screen.getByText('Technology')).toBeInTheDocument();
+  });
+
+  it('does not show category chip when category is absent', () => {
+    renderCard({ ...baseCampaign, category: null });
+    expect(screen.queryByText('Technology')).toBeNull();
+  });
 });

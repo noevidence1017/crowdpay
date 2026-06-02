@@ -195,7 +195,7 @@ router.get('/', getCampaignsValidation, validateRequest, asyncHandler(async (req
    *                   items:
    *                     type: object
    */
-  const { search, status, asset, sort = 'newest' } = req.query;
+  const { search, status, asset, category, sort = 'newest' } = req.query;
   const limit = Math.min(Number(req.query.limit || 20), 100);
   const offset = Math.max(Number(req.query.offset || 0), 0);
   const filters = [];
@@ -220,6 +220,10 @@ router.get('/', getCampaignsValidation, validateRequest, asyncHandler(async (req
     filters.push(
       `(c.title ILIKE $${params.length} OR COALESCE(c.description, '') ILIKE $${params.length})`
     );
+  }
+  if (category) {
+    params.push(category);
+    filters.push(`c.category = $${params.length}`);
   }
 
   const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
@@ -257,6 +261,18 @@ router.get('/', getCampaignsValidation, validateRequest, asyncHandler(async (req
 router.get('/mine', requireAuth, asyncHandler(async (req, res) => {
   const campaigns = await listCreatorCampaigns(req.user.userId);
   res.json(campaigns);
+}));
+
+// Category counts for active campaigns
+router.get('/categories', asyncHandler(async (req, res) => {
+  const { rows } = await db.query(
+    `SELECT category, COUNT(*)::int AS count
+     FROM campaigns
+     WHERE status = 'active' AND category IS NOT NULL AND deleted_at IS NULL
+     GROUP BY category
+     ORDER BY count DESC`
+  );
+  res.json(rows);
 }));
 
 router.get('/:id/milestones', asyncHandler(async (req, res) => {
@@ -685,7 +701,7 @@ router.post('/', requireAuth, requireRole('creator', 'admin'), createCampaignVal
    *       403:
    *         description: Forbidden
    */
-  const { title, description, target_amount, asset_type, deadline, milestones, min_contribution, max_contribution } = req.body;
+  const { title, description, target_amount, asset_type, deadline, milestones, min_contribution, max_contribution, category } = req.body;
 
   if (deadline) {
     const [year, month, day] = String(deadline).split('-').map(Number);
@@ -743,11 +759,11 @@ router.post('/', requireAuth, requireRole('creator', 'admin'), createCampaignVal
     const { rows } = await client.query(
       `INSERT INTO campaigns
          (title, description, target_amount, asset_type, wallet_public_key, creator_id, deadline, 
-          min_contribution, max_contribution, escrow_contract_id, milestones_contract_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          min_contribution, max_contribution, escrow_contract_id, milestones_contract_id, category)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING *`,
       [title, description, target_amount, asset_type, wallet.publicKey, req.user.userId, deadline, 
-       min_contribution || null, max_contribution || null, escrowContractId, milestonesContractId]
+       min_contribution || null, max_contribution || null, escrowContractId, milestonesContractId, category || null]
     );
     campaign = rows[0];
 

@@ -314,3 +314,134 @@ test('GET /api/campaigns supports search, asset filter, and sort', async () => {
   assert.ok(listQuery.params.includes('%solar%'));
   assert.ok(listQuery.params.includes('USDC'));
 });
+
+test('GET /api/campaigns/categories returns category counts', async () => {
+  const app = buildApp({
+    queryImpl: async (text, params) => {
+      return {
+        rows: [
+          { category: 'technology', count: '5' },
+          { category: 'education', count: '3' },
+        ],
+      };
+    },
+  });
+
+  const response = await request(app).get('/api/campaigns/categories');
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.body, [
+    { category: 'technology', count: '5' },
+    { category: 'education', count: '3' },
+  ]);
+});
+
+test('GET /api/campaigns supports category filter', async () => {
+  const queries = [];
+  const app = buildApp({
+    queryImpl: async (text, params) => {
+      queries.push({ text, params });
+      if (text.includes('AS total')) {
+        return { rows: [{ total: 1 }] };
+      }
+      return {
+        rows: [
+          {
+            id: 'camp-1',
+            title: 'Solar panels',
+            description: 'Clean energy',
+            asset_type: 'USDC',
+            status: 'active',
+            raised_amount: '80',
+            target_amount: '100',
+            category: 'technology',
+          },
+        ],
+      };
+    },
+  });
+
+  const response = await request(app).get('/api/campaigns?category=technology');
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.campaigns[0].category, 'technology');
+  const listQuery = queries.find((q) => q.text.includes('ORDER BY'));
+  assert.ok(listQuery);
+  assert.match(listQuery.text, /category = \$/i);
+  assert.ok(listQuery.params.includes('technology'));
+});
+
+test('POST /api/campaigns accepts valid category', async (t) => {
+  const previous = process.env.KYC_REQUIRED_FOR_CAMPAIGNS;
+  t.after(() => {
+    if (previous === undefined) delete process.env.KYC_REQUIRED_FOR_CAMPAIGNS;
+    else process.env.KYC_REQUIRED_FOR_CAMPAIGNS = previous;
+  });
+  process.env.KYC_REQUIRED_FOR_CAMPAIGNS = 'false';
+
+  const queries = [];
+  const app = buildApp({
+    authUser: { userId: 'creator-1', role: 'creator' },
+    queryImpl: async (text, params) => {
+      queries.push({ text, params });
+      if (text.includes('SELECT email, wallet_public_key, kyc_status FROM users')) {
+        return { rows: [{ wallet_public_key: 'GCREATOR', kyc_status: 'unverified' }] };
+      }
+      if (text.includes('INSERT INTO campaigns')) {
+        return {
+          rows: [
+            {
+              id: 'campaign-1',
+              title: 'Tech campaign',
+              asset_type: 'USDC',
+              creator_id: 'creator-1',
+              category: 'technology',
+            },
+          ],
+        };
+      }
+      return { rows: [] };
+    },
+    buildWithdrawalTransactionImpl: async () => '',
+    insertWithdrawalPendingSignaturesImpl: async () => 'tx-row',
+  });
+
+  const response = await request(app)
+    .post('/api/campaigns')
+    .set('Authorization', 'Bearer token')
+    .send({ title: 'Tech campaign', target_amount: '100', asset_type: 'USDC', category: 'technology' });
+
+  assert.equal(response.status, 201);
+  assert.equal(response.body.category, 'technology');
+  
+  const insertQuery = queries.find((q) => q.text.includes('INSERT INTO campaigns'));
+  assert.ok(insertQuery);
+  assert.ok(insertQuery.text.includes('category'));
+  assert.ok(insertQuery.params.includes('technology'));
+});
+
+test('POST /api/campaigns rejects invalid category', async (t) => {
+  const previous = process.env.KYC_REQUIRED_FOR_CAMPAIGNS;
+  t.after(() => {
+    if (previous === undefined) delete process.env.KYC_REQUIRED_FOR_CAMPAIGNS;
+    else process.env.KYC_REQUIRED_FOR_CAMPAIGNS = previous;
+  });
+  process.env.KYC_REQUIRED_FOR_CAMPAIGNS = 'false';
+
+  const app = buildApp({
+    authUser: { userId: 'creator-1', role: 'creator' },
+    queryImpl: async () => ({ rows: [] }),
+    buildWithdrawalTransactionImpl: async () => '',
+    insertWithdrawalPendingSignaturesImpl: async () => 'tx-row',
+  });
+
+  const response = await request(app)
+    .post('/api/campaigns')
+    .set('Authorization', 'Bearer token')
+    .send({ title: 'Tech campaign', target_amount: '100', asset_type: 'USDC', category: 'invalid_category' });
+
+  assert.equal(response.status, 400);
+  assert.ok(response.body.errors);
+  assert.ok(response.body.errors.some(e => e.msg && e.msg.includes('category must be one of')));
+});
+

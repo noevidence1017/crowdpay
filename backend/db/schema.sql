@@ -38,6 +38,10 @@ CREATE TABLE campaigns (
                         CHECK (status IN ('active', 'funded', 'in_progress', 'completed', 'closed', 'withdrawn', 'failed')),
   deadline            DATE,
   show_backer_amounts BOOLEAN DEFAULT TRUE,
+  category            TEXT CHECK (category IN (
+                        'technology', 'community', 'arts', 'education',
+                        'environment', 'health', 'business', 'open_source', 'other'
+                      )),
   created_at          TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -104,6 +108,7 @@ CREATE UNIQUE INDEX contributions_anchor_transaction_idx
   WHERE anchor_transaction_id IS NOT NULL;
 CREATE INDEX ON campaigns (status);
 CREATE INDEX ON campaigns (creator_id);
+CREATE INDEX ON campaigns (category);
 CREATE UNIQUE INDEX users_kyc_provider_reference_idx
   ON users (kyc_provider_reference)
   WHERE kyc_provider_reference IS NOT NULL;

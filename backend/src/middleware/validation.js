@@ -5,6 +5,10 @@ const { getSupportedAssetCodes } = require('../services/stellarService');
 const SUPPORTED_ASSETS = getSupportedAssetCodes();
 const VALID_CAMPAIGN_STATUSES = ['active', 'funded', 'closed', 'failed'];
 const VALID_ORDER_BY = ['newest', 'ending_soon', 'most_funded', 'most_backed', 'closest_to_goal'];
+const VALID_CATEGORIES = [
+  'technology', 'community', 'arts', 'education',
+  'environment', 'health', 'business', 'open_source', 'other',
+];
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function isUuid(value) {
@@ -162,6 +166,10 @@ const createCampaignValidation = [
     .optional()
     .isBoolean()
     .withMessage('show_backer_amounts must be a boolean'),
+  body('category')
+    .optional({ nullable: true, checkFalsy: true })
+    .isIn(VALID_CATEGORIES)
+    .withMessage(`category must be one of: ${VALID_CATEGORIES.join(', ')}`),
 ];
 
 const createCampaignUpdateValidation = [
@@ -254,6 +262,10 @@ const getCampaignsValidation = [
     .optional()
     .isIn(SUPPORTED_ASSETS)
     .withMessage(`asset must be one of: ${SUPPORTED_ASSETS.join(', ')}`),
+  query('category')
+    .optional()
+    .isIn(VALID_CATEGORIES)
+    .withMessage(`category must be one of: ${VALID_CATEGORIES.join(', ')}`),
   query('sort')
     .optional()
     .isIn(VALID_ORDER_BY)

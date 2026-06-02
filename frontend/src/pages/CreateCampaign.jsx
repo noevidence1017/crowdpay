@@ -23,6 +23,18 @@ const ASSETS = [
     hint: 'Native Stellar asset. Simple for contributors who already hold XLM.',
   },
 ];
+
+const CATEGORIES = [
+  { value: 'technology',  label: 'Technology' },
+  { value: 'community',   label: 'Community' },
+  { value: 'arts',        label: 'Arts & Culture' },
+  { value: 'education',   label: 'Education' },
+  { value: 'environment', label: 'Environment' },
+  { value: 'health',      label: 'Health' },
+  { value: 'business',    label: 'Business' },
+  { value: 'open_source', label: 'Open Source' },
+  { value: 'other',       label: 'Other' },
+];
 function emptyMilestone() {
   return { title: '', description: '', release_percentage: '' };
 }
@@ -41,6 +53,7 @@ export default function CreateCampaign() {
     min_contribution: '',
     max_contribution: '',
     show_backer_amounts: true,
+    category: '',
   });
   const [coverImageFile, setCoverImageFile] = useState(null);
   const [coverImagePreview, setCoverImagePreview] = useState('');
@@ -223,6 +236,7 @@ export default function CreateCampaign() {
           target_amount: form.target_amount,
           asset_type: form.asset_type,
           deadline: form.deadline || undefined,
+          category: form.category || undefined,
           min_contribution: form.min_contribution ? Number(form.min_contribution) : undefined,
           max_contribution: form.max_contribution ? Number(form.max_contribution) : undefined,
           milestones: form.milestones.length
@@ -435,6 +449,18 @@ export default function CreateCampaign() {
                 ))}
               </div>
             </fieldset>
+
+            <div className="form-stack" style={{ marginTop: '1rem' }}>
+              <label className="label-strong" htmlFor="cc-category">
+                Category <span style={{ fontWeight: 500, color: 'var(--color-text-muted)' }}>(optional)</span>
+              </label>
+              <select id="cc-category" value={form.category} onChange={setField('category')}>
+                <option value="">Select a category</option>
+                {CATEGORIES.map((c) => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
+            </div>
 
             {error && (
               <p className="alert alert--error" style={{ marginTop: '1rem' }} role="alert">
