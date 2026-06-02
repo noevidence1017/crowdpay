@@ -162,7 +162,6 @@ export default function Campaign() {
   const [inviteError, setInviteError] = useState("");
   const [inviteSuccess, setInviteSuccess] = useState(false);
   const [showQR, setShowQR] = useState(false);
-  const [showEmbedSection, setShowEmbedSection] = useState(false);
   const [embedCopied, setEmbedCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [isEditingCampaign, setIsEditingCampaign] = useState(false);
@@ -617,6 +616,9 @@ export default function Campaign() {
     100,
     (campaign.raised_amount / campaign.target_amount) * 100,
   ).toFixed(1);
+  const canPostUpdate = user?.id && campaign.creator_id === user.id;
+  const campaignUrl = `${window.location.origin}/campaigns/${id}`;
+  const embedCode = `<iframe src="${window.location.origin}/widget/campaigns/${id}" width="320" height="120" frameborder="0" style="border-radius:10px"></iframe>`;
   const currentUserId = user?.id || user?.userId;
   const canPostUpdate =
     currentUserId && String(campaign.creator_id) === String(currentUserId);
@@ -1200,20 +1202,33 @@ export default function Campaign() {
           {showQR ? "Hide QR code" : "Show QR code"}
         </button>
         {showQR && (
-          <div
-            style={{
-              marginTop: "1rem",
-              display: "flex",
-              justifyContent: "center",
-            }}
-          >
-            <CampaignQRCode
-              url={`${window.location.origin}/campaigns/${id}`}
-              size={200}
-            />
+          <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'center' }}>
+            <CampaignQRCode url={campaignUrl} size={200} />
           </div>
         )}
       </div>
+
+      <details style={{ ...styles.card, marginTop: "-0.75rem" }}>
+        <summary style={styles.embedSummary}>
+          Embed on your site
+        </summary>
+        <pre style={{ ...styles.embedCode, marginTop: "0.75rem" }}>
+          {embedCode}
+        </pre>
+        <button
+          type="button"
+          onClick={() => {
+            navigator.clipboard.writeText(embedCode).then(() => {
+              setEmbedCopied(true);
+              setTimeout(() => setEmbedCopied(false), 2000);
+            });
+          }}
+          className="btn-secondary"
+          style={{ marginTop: "0.75rem", fontSize: "0.85rem", minHeight: "auto" }}
+        >
+          {embedCopied ? "Copied!" : "Copy snippet"}
+        </button>
+      </details>
 
       {/* Report a problem — visible to contributors who have backed this campaign */}
       {user &&
@@ -1245,123 +1260,6 @@ export default function Campaign() {
             )}
           </div>
         )}
-      {canPostUpdate && (
-        <div style={styles.card}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "1rem",
-            }}
-          >
-            <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700 }}>
-              Embed this campaign
-            </h3>
-            <button
-              type="button"
-              onClick={() => setShowEmbedSection(!showEmbedSection)}
-              style={{
-                background: "transparent",
-                color: "var(--color-accent)",
-                border: "1px solid var(--color-accent)",
-                padding: "0.4rem 0.8rem",
-                fontSize: "0.85rem",
-                minHeight: "auto",
-              }}
-            >
-              {showEmbedSection ? "Hide" : "Show"}
-            </button>
-          </div>
-
-          {showEmbedSection && (
-            <>
-              <p
-                style={{
-                  fontSize: "0.85rem",
-                  color: "var(--color-text-hint)",
-                  marginBottom: "1rem",
-                  lineHeight: 1.5,
-                }}
-              >
-                Add this embed code to your website or blog to display a live
-                funding widget for this campaign.
-              </p>
-
-              <div style={{ marginBottom: "1rem" }}>
-                <label
-                  style={{
-                    fontSize: "0.8rem",
-                    fontWeight: 600,
-                    color: "var(--color-text-hint)",
-                    display: "block",
-                    marginBottom: "0.5rem",
-                  }}
-                >
-                  Embed code
-                </label>
-                <div style={{ position: "relative" }}>
-                  <pre style={styles.embedCode}>
-                    {`<iframe src="${window.location.origin}/embed/campaigns/${campaign.id}" \n        width="480" height="280" frameborder="0">\n</iframe>`}
-                  </pre>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const code = `<iframe src="${window.location.origin}/embed/campaigns/${campaign.id}" width="480" height="280" frameborder="0"></iframe>`;
-                      navigator.clipboard.writeText(code).then(() => {
-                        setEmbedCopied(true);
-                        setTimeout(() => setEmbedCopied(false), 2000);
-                      });
-                    }}
-                    style={{
-                      position: "absolute",
-                      top: "0.5rem",
-                      right: "0.5rem",
-                      background: embedCopied
-                        ? "var(--color-success-text)"
-                        : "var(--color-accent)",
-                      color: "#fff",
-                      padding: "0.4rem 0.8rem",
-                      fontSize: "0.8rem",
-                      minHeight: "auto",
-                    }}
-                  >
-                    {embedCopied ? "Copied!" : "Copy"}
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label
-                  style={{
-                    fontSize: "0.8rem",
-                    fontWeight: 600,
-                    color: "var(--color-text-hint)",
-                    display: "block",
-                    marginBottom: "0.5rem",
-                  }}
-                >
-                  Preview
-                </label>
-                <div style={styles.embedPreview}>
-                  <iframe
-                    src={`/embed/campaigns/${campaign.id}`}
-                    width="100%"
-                    height="280"
-                    frameBorder="0"
-                    title="Campaign embed preview"
-                    style={{
-                      border: "1px solid var(--color-border-light)",
-                      borderRadius: "6px",
-                    }}
-                  />
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
       {token && (
         <div id="withdrawals">
           <WithdrawalsSection
@@ -2619,6 +2517,12 @@ const styles = {
     whiteSpace: "pre-wrap",
     wordBreak: "break-all",
     paddingRight: "5rem",
+  },
+  embedSummary: {
+    cursor: "pointer",
+    fontSize: "0.85rem",
+    color: "var(--color-accent)",
+    fontWeight: 600,
   },
   embedPreview: {
     background: "var(--color-surface)",

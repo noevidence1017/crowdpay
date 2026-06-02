@@ -231,6 +231,40 @@ test('POST /api/campaigns returns 400 for past deadline', async () => {
   );
 });
 
+test('GET /api/campaigns/:id/widget returns public CORS widget data', async () => {
+  const app = buildApp({
+    queryImpl: async (text, params) => {
+      assert.match(text, /SELECT c\.title, c\.raised_amount, c\.target_amount/i);
+      assert.deepEqual(params, ['campaign-1']);
+      return {
+        rows: [
+          {
+            title: 'Solar panels',
+            raised_amount: '75',
+            target_amount: '100',
+            asset_type: 'USDC',
+            status: 'active',
+            contributor_count: 3,
+          },
+        ],
+      };
+    },
+  });
+
+  const response = await request(app).get('/api/campaigns/campaign-1/widget');
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers['access-control-allow-origin'], '*');
+  assert.deepEqual(response.body, {
+    title: 'Solar panels',
+    raised_amount: '75',
+    target_amount: '100',
+    asset_type: 'USDC',
+    status: 'active',
+    contributor_count: 3,
+  });
+});
+
 test('POST /api/campaigns/:id/trigger-refunds creates refund requests for contributions', async () => {
   const created = [];
   const queryImpl = async (text, params) => {
