@@ -1808,6 +1808,36 @@ router.post(
   }),
 );
 
+// Webhook management for campaigns
+function isValidWebhookUrl(urlString) {
+  try {
+    const u = new URL(urlString);
+    if (u.protocol === 'https:') return true;
+    if (u.protocol === 'http:' && (u.hostname === 'localhost' || u.hostname === '127.0.0.1')) {
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+// Register a webhook for a campaign
+router.post('/:id/webhooks', requireAuth, requireCampaignMember('owner'), asyncHandler(async (req, res) => {
+  const { url, events } = req.body || {};
+  const campaignId = req.params.id;
+
+  if (!url) {
+    return res.status(400).json({ error: 'url is required' });
+  }
+
+  if (!isValidWebhookUrl(url)) {
+    return res.status(400).json({ error: 'url must be https, or http://localhost for development' });
+  }
+
+  // Check if campaign exists
+  const { rows: campaignRows } = await db.query(
+    'SELECT id FROM campaigns WHERE id = $1',
 // POST /campaigns/:id/refund/initiate - Creator requests a batch refund XDR
 router.post('/:id/refund/initiate', requireAuth, requireCampaignMember('owner'), asyncHandler(async (req, res) => {
   const campaignId = req.params.id;
@@ -1818,6 +1848,43 @@ router.post('/:id/refund/initiate', requireAuth, requireCampaignMember('owner'),
   if (!campaignRows.length) {
     return res.status(404).json({ error: 'Campaign not found' });
   }
+
+  // Check webhook limit (5 per campaign)
+  const { rows: countRows } = await db.query(
+    'SELECT COUNT(*)::int as count FROM campaign_webhooks WHERE campaign_id = $1 AND active = TRUE',
+    [campaignId]
+  );
+  if (countRows[0].count >= 5) {
+    return res.status(429).json({ error: 'Webhooks limited to 5 per campaign' });
+  }
+
+  // Default to contribution.indexed event if not specified
+  let eventList = events ? [events].flat() : ['contribution.indexed'];
+  eventList = [...new Set(eventList.filter(e => typeof e === 'string'))];
+
+  // Generate secret (creator will store this for verification)
+  const secret = crypto.randomBytes(32).toString('hex');
+
+  const { rows } = await db.query(
+    `INSERT INTO campaign_webhooks (campaign_id, url, secret, events, active)
+     VALUES ($1, $2, $3, $4, TRUE)
+     RETURNING id, campaign_id, url, events, created_at`,
+    [campaignId, url, secret, eventList]
+  );
+
+  res.status(201).json({
+    ...rows[0],
+    secret,
+    message: 'Store the signing secret; it is only shown once.',
+  });
+}));
+
+// List webhooks for a campaign
+router.get('/:id/webhooks', requireAuth, requireCampaignMember('owner'), asyncHandler(async (req, res) => {
+  const campaignId = req.params.id;
+
+  const { rows: campaignRows } = await db.query(
+    'SELECT id FROM campaigns WHERE id = $1',
   const campaign = campaignRows[0];
 
   if (campaign.status !== 'failed') {
@@ -1876,6 +1943,75 @@ router.post('/:id/refund/approve/creator', requireAuth, requireCampaignMember('o
   if (!campaignRows.length) {
     return res.status(404).json({ error: 'Campaign not found' });
   }
+
+  const { rows } = await db.query(
+    `SELECT id, url, events, active, created_at,
+            CONCAT(LEFT(secret, 10), '…', RIGHT(secret, 4)) AS secret_hint
+     FROM campaign_webhooks
+     WHERE campaign_id = $1
+     ORDER BY created_at DESC`,
+    [campaignId]
+  );
+
+  res.json(rows);
+}));
+
+// Delete a webhook
+router.delete('/:id/webhooks/:wid', requireAuth, requireCampaignMember('owner'), asyncHandler(async (req, res) => {
+  const { id: campaignId, wid: webhookId } = req.params;
+
+  const { rows } = await db.query(
+    `UPDATE campaign_webhooks
+     SET active = FALSE
+     WHERE id = $1 AND campaign_id = $2
+     RETURNING id`,
+    [webhookId, campaignId]
+  );
+
+  if (!rows.length) {
+    return res.status(404).json({ error: 'Webhook not found' });
+  }
+
+  res.json({ revoked: true, id: rows[0].id });
+}));
+
+// Get delivery history for a campaign's webhooks
+router.get('/:id/webhooks/:wid/deliveries', requireAuth, requireCampaignMember('owner'), asyncHandler(async (req, res) => {
+  const { id: campaignId, wid: webhookId } = req.params;
+  const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
+  const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+
+  // Verify webhook belongs to this campaign
+  const { rows: webhookRows } = await db.query(
+    'SELECT id FROM campaign_webhooks WHERE id = $1 AND campaign_id = $2',
+    [webhookId, campaignId]
+  );
+  if (!webhookRows.length) {
+    return res.status(404).json({ error: 'Webhook not found' });
+  }
+
+  const { rows: countRows } = await db.query(
+    `SELECT COUNT(*)::int as total FROM campaign_webhook_deliveries WHERE webhook_id = $1`,
+    [webhookId]
+  );
+
+  const { rows } = await db.query(
+    `SELECT id, event, status, response_status, attempt_count, last_error,
+            delivered_at, failed_at, created_at, updated_at
+     FROM campaign_webhook_deliveries
+     WHERE webhook_id = $1
+     ORDER BY created_at DESC
+     LIMIT $2
+     OFFSET $3`,
+    [webhookId, limit, offset]
+  );
+
+  res.json({
+    total: countRows[0]?.total || 0,
+    limit,
+    offset,
+    deliveries: rows
+  });
   const campaign = campaignRows[0];
 
   if (campaign.status !== 'failed') {

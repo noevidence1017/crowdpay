@@ -14,6 +14,7 @@ const { markContributionIndexed } = require("./stellarTransactionService");
 const { sendContributionReceipt } = require("./emailService");
 const {
   emitWebhookEventForUser,
+  emitWebhookEventForCampaign,
   WEBHOOK_EVENTS,
 } = require("./webhookDispatcher");
 const cache = require("../utils/cache");
@@ -381,6 +382,7 @@ async function handlePayment(campaignId, walletPublicKey, payment) {
         }),
       );
 
+      // User-level webhooks (legacy)
       emitWebhookEventForUser(
         postCommitHooks.creatorId,
         WEBHOOK_EVENTS.CONTRIBUTION_RECEIVED,
@@ -389,12 +391,21 @@ async function handlePayment(campaignId, walletPublicKey, payment) {
         logger.error("Contribution webhook emit failed", { error: e.message }),
       );
 
-      createNotification(postCommitHooks.creatorId, {
-        type: 'contribution_received',
-        title: 'New contribution received',
-        body: `${postCommitHooks.contributionPayload.amount} ${postCommitHooks.contributionPayload.asset} received.`,
-        link: `/campaigns/${postCommitHooks.campaignId}`,
-      }).catch(() => {});
+      // Campaign-level webhooks
+      emitWebhookEventForCampaign(
+        postCommitHooks.campaignId,
+        WEBHOOK_EVENTS.CONTRIBUTION_INDEXED,
+        {
+          campaign_id: postCommitHooks.campaignId,
+          tx_hash: postCommitHooks.receiptPayload.txHash,
+          amount: postCommitHooks.receiptPayload.amount,
+          asset: postCommitHooks.receiptPayload.asset,
+          sender: postCommitHooks.receiptPayload.senderPublicKey,
+          timestamp: new Date().toISOString(),
+        },
+      ).catch((e) =>
+        logger.error("Campaign contribution webhook emit failed", { error: e.message }),
+      );
 
       if (postCommitHooks.fundedCampaign) {
         emitWebhookEventForUser(
