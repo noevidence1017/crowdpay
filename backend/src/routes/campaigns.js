@@ -418,6 +418,28 @@ router.post(
   }),
 );
 
+// Get clone data for campaign
+router.get('/:id/clone-data', requireAuth, asyncHandler(async (req, res) => {
+  const { rows } = await db.query(
+    `SELECT title, description, target_amount, asset_type, min_contribution, max_contribution, show_backer_amounts, deleted_at
+     FROM campaigns WHERE id = $1`,
+    [req.params.id]
+  );
+  if (!rows.length || rows[0].deleted_at) {
+    return res.status(404).json({ error: 'Campaign not found' });
+  }
+
+  res.json({
+    title: `${rows[0].title} (copy)`,
+    description: rows[0].description,
+    target_amount: rows[0].target_amount,
+    asset_type: rows[0].asset_type,
+    min_contribution: rows[0].min_contribution,
+    max_contribution: rows[0].max_contribution,
+    show_backer_amounts: rows[0].show_backer_amounts,
+  });
+}));
+
 // Get single Campaign
 router.get(
   "/:id",

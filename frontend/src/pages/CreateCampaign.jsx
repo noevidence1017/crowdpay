@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import SimpleMDE from 'react-simplemde-editor';
 import 'easymde/dist/easymde.min.css';
 import { api } from '../services/api';
@@ -34,9 +34,17 @@ function milestonePercentTotal(milestones) {
 export default function CreateCampaign() {
   const { user, ready, updateUser } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
+    title: location.state?.prefill?.title || '',
+    description: location.state?.prefill?.description || '',
+    target_amount: location.state?.prefill?.target_amount || '',
+    asset_type: location.state?.prefill?.asset_type || 'USDC',
     deadline: '',
+    min_contribution: location.state?.prefill?.min_contribution || '',
+    max_contribution: location.state?.prefill?.max_contribution || '',
+    show_backer_amounts: location.state?.prefill?.show_backer_amounts ?? true,
     milestones: [],
     min_contribution: '',
     max_contribution: '',
@@ -354,6 +362,11 @@ export default function CreateCampaign() {
       )}
 
       <form onSubmit={handleSubmit}>
+        {location.state?.prefill && (
+          <div className="alert alert--info" style={{ marginBottom: '1.25rem' }}>
+            Pre-filled from an existing campaign. Review and adjust before launching.
+          </div>
+        )}
         {step === 1 && (
           <>
             <div className="form-stack">

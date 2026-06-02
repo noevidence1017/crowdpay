@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Link, useParams, useLocation } from "react-router-dom";
+import React, { useEffect, useState, useRef } from "react";
+import { Link, useParams, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import ContributeModal from "../components/ContributeModal";
@@ -128,7 +128,9 @@ export default function Campaign() {
   const contributeBtnRef = useRef(null);
   const { id } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const { user, token } = useAuth();
+  const contributeBtnRef = useRef(null);
   const [campaign, setCampaign] = useState(null);
   const [loadError, setLoadError] = useState("");
   const [contributions, setContributions] = useState(null);
@@ -346,6 +348,15 @@ export default function Campaign() {
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
+
+  async function handleClone() {
+    try {
+      const data = await api.getCloneData(id, token);
+      navigate('/campaigns/new', { state: { prefill: data } });
+    } catch (err) {
+      alert(err.message || 'Failed to fetch campaign clone data');
+    }
+  }
 
   async function handleInviteSubmit(e) {
     e.preventDefault();
@@ -862,6 +873,17 @@ export default function Campaign() {
             Contributions are closed while this campaign is{" "}
             <strong>{campaign.status}</strong>.
           </p>
+        )}
+
+        {user && (
+          <button
+            type="button"
+            className="btn-secondary"
+            style={{ ...styles.cta, marginTop: "0.75rem" }}
+            onClick={handleClone}
+          >
+            Clone campaign
+          </button>
         )}
       </div>
 
