@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
@@ -9,6 +9,35 @@ export default function Navbar() {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
   const language = (i18n.resolvedLanguage || i18n.language || 'en').split('-')[0];
+
+  const [notifications, setNotifications] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const bellRef = useRef(null);
+
+  const unread = notifications.filter((n) => !n.read_at).length;
+
+  useEffect(() => {
+    if (!user) {
+      setNotifications([]);
+      return;
+    }
+    const fetchNotifs = () => api.getNotifications().then(setNotifications).catch(() => {});
+    fetchNotifs();
+    const id = setInterval(fetchNotifs, 30_000);
+    return () => clearInterval(id);
+  }, [user]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!showDropdown) return;
+    function handleOutside(e) {
+      if (bellRef.current && !bellRef.current.contains(e.target)) {
+        setShowDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [showDropdown]);
 
   function handleLogout() {
     logout();
@@ -46,6 +75,24 @@ export default function Navbar() {
                 {t('nav.startCampaign')}
               </Link>
               <span style={styles.name} aria-hidden="true">{user.name}</span>
+              <div style={styles.bellWrap} ref={bellRef}>
+                <button
+                  onClick={() => setShowDropdown((v) => !v)}
+                  style={styles.bellBtn}
+                  aria-label={`${unread} unread notifications`}
+                >
+                  🔔
+                  {unread > 0 && <span style={styles.badge}>{unread}</span>}
+                </button>
+                {showDropdown && (
+                  <NotificationDropdown
+                    notifications={notifications}
+                    onMarkRead={handleMarkRead}
+                    onMarkAllRead={handleMarkAllRead}
+                    onClose={() => setShowDropdown(false)}
+                  />
+                )}
+              </div>
               <button onClick={handleLogout} className="btn-secondary" style={{ padding: '0.4rem 0.9rem' }}>
                 {t('nav.logout')}
               </button>
