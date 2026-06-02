@@ -10,6 +10,7 @@ export default function Login() {
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   function set(field) { return (e) => setForm((f) => ({ ...f, [field]: e.target.value })); }
 
@@ -41,7 +42,38 @@ export default function Login() {
       <h1 style={{ fontSize: '1.6rem', fontWeight: 800, marginBottom: '1.5rem' }}>Log in</h1>
       <form noValidate onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
         <input type="email" placeholder="Email" value={form.email} onChange={set('email')} required />
-        <input type="password" placeholder="Password" value={form.password} onChange={set('password')} required />
+        <div style={{ position: 'relative' }}>
+          <input
+            id="login-password"
+            type={showPassword ? 'text' : 'password'}
+            placeholder="Password"
+            value={form.password}
+            onChange={set('password')}
+            required
+            style={{ paddingRight: '2.5rem', width: '100%' }}
+            autoComplete="current-password"
+          />
+          <button
+            type="button"
+            aria-label={showPassword ? 'Hide password' : 'Show password'}
+            onClick={() => setShowPassword((v) => !v)}
+            style={{
+              position: 'absolute',
+              right: '0.6rem',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: '#888',
+              padding: '0.2rem',
+              minHeight: 'auto',
+              fontSize: '0.85rem',
+            }}
+          >
+            {showPassword ? 'Hide' : 'Show'}
+          </button>
+        </div>
         {error && <p style={{ color: 'var(--color-status-error)', fontSize: '0.875rem' }}>{error}</p>}
         <button type="submit" className="btn-primary" disabled={loading} style={{ padding: '0.8rem' }}>
           {loading ? 'Logging in…' : 'Log in'}

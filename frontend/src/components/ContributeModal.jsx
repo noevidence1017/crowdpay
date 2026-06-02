@@ -1,10 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
-import {
-  getNetwork,
-  isConnected as isFreighterConnected,
-  requestAccess,
-  signTransaction,
-} from '@stellar/freighter-api';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import { stellarExpertTxUrl } from '../config/stellar';
@@ -70,18 +64,9 @@ export default function ContributeModal({ campaign, onClose, onSuccess }) {
   const [displayName, setDisplayName] = useState('');
   const anchorPopupRef = useRef(null);
 
-  useEffect(() => {
-    if (campaign?.id) {
-      api.getContributions(campaign.id)
-        .then(setExistingContributions)
-        .catch(() => setExistingContributions([]));
-    }
-  }, [campaign?.id]);
+  const modalRef = useRef(null);
 
-  const selectedAnchor = anchorInfo.anchors.find((anchor) => anchor.id === selectedAnchorId) || null;
-  const effectiveSendAsset =
-    paymentMethod === 'anchor' ? selectedAnchor?.asset?.code || campaign.asset_type : sendAsset;
-  const isPathPayment = effectiveSendAsset !== campaign.asset_type;
+  const isPathPayment = sendAsset !== campaign.asset_type;
   const destAmount = amount.trim();
 
   const fetchQuote = useCallback(async () => {
@@ -131,189 +116,32 @@ export default function ContributeModal({ campaign, onClose, onSuccess }) {
   }, [onClose]);
 
   useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const connection = await isFreighterConnected();
-        if (active) {
-          setFreighterAvailable(Boolean(connection?.isConnected));
+    const modal = modalRef.current;
+    if (!modal) return;
+    const focusable = modal.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    first?.focus();
+
+    function trapTab(e) {
+      if (e.key !== 'Tab') return;
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last?.focus();
         }
-      } catch {
-        if (active) {
-          setFreighterAvailable(false);
-        }
-      } finally {
-        if (active) {
-          setFreighterChecked(true);
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first?.focus();
         }
       }
-    })();
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    api
-      .getAnchorInfo()
-      .then((info) => {
-        if (!active) return;
-        setAnchorInfo(info || { anchors: [] });
-        const firstAvailable = (info?.anchors || []).find((anchor) => anchor.available);
-        if (firstAvailable) {
-          setSelectedAnchorId(firstAvailable.id);
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setAnchorInfo({ anchors: [] });
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (phase !== 'anchor' || !anchorSession?.id) return undefined;
-    let stopped = false;
-
-    const closePopup = () => {
-      if (anchorPopupRef.current && !anchorPopupRef.current.closed) {
-        anchorPopupRef.current.close();
-      }
-    };
-
-    const poll = async () => {
-      try {
-        const next = await api.getAnchorDepositStatus(anchorSession.id, token);
-        if (stopped) return;
-        setAnchorSession(next);
-        if (next.contribution_tx_hash) {
-          setResult({
-            tx_hash: next.contribution_tx_hash,
-            conversion_quote: next.conversion_quote,
-            anchor_transaction_id: next.anchor_transaction_id,
-            anchor_id: next.anchor_id,
-          });
-          setPhase('success');
-          closePopup();
-          onSuccess();
-          return;
-        }
-        if (next.status === 'failed') {
-          setError(next.last_error || 'The anchor deposit could not be completed.');
-          setPhase('form');
-          closePopup();
-        }
-      } catch (err) {
-        if (!stopped) {
-          setError(err.message || 'Could not refresh the anchor deposit status.');
-        }
-      }
-    };
-
-    poll();
-    const intervalId = window.setInterval(poll, 4000);
-    return () => {
-      stopped = true;
-      window.clearInterval(intervalId);
-    };
-  }, [anchorSession?.id, onSuccess, phase, token]);
-
-  async function submitWithCustodial() {
-    setLoadingLabel('Submitting with CrowdPay wallet…');
-    return api.contribute(
-      { campaign_id: campaign.id, amount: destAmount, send_asset: sendAsset, display_name: displayName.trim() || undefined },
-      token
-    );
-  }
-
-  async function submitWithFreighter() {
-    setLoadingLabel('Connecting to Freighter…');
-    const access = await requestAccess();
-    if (access?.error) {
-      throw new Error(friendlyFreighterError(access.error, 'Could not connect to Freighter.'));
     }
-    const signerAddress = access?.address;
-    if (!signerAddress) {
-      throw new Error('Freighter did not return a Stellar account.');
-    }
-
-    setLoadingLabel('Preparing transaction…');
-    const prepared = await api.prepareFreighterContribution(
-      {
-        campaign_id: campaign.id,
-        amount: destAmount,
-        send_asset: sendAsset,
-        sender_public_key: signerAddress,
-        display_name: displayName.trim() || undefined,
-      },
-      token
-    );
-
-    setLoadingLabel('Checking Freighter network…');
-    const network = await getNetwork();
-    if (network?.error) {
-      throw new Error(friendlyFreighterError(network.error, 'Could not read Freighter network.'));
-    }
-    if (network?.networkPassphrase !== prepared.network_passphrase) {
-      const current = network?.network || 'another network';
-      throw new Error(`Freighter is connected to ${current}. Switch it to ${prepared.network_name} and try again.`);
-    }
-
-    setLoadingLabel('Waiting for signature…');
-    const signed = await signTransaction(prepared.unsigned_xdr, {
-      networkPassphrase: prepared.network_passphrase,
-      address: signerAddress,
-    });
-    if (signed?.error) {
-      throw new Error(friendlyFreighterError(signed.error, 'Freighter could not sign this transaction.'));
-    }
-    if (!signed?.signedTxXdr) {
-      throw new Error('Freighter did not return a signed transaction.');
-    }
-
-    setLoadingLabel('Submitting signed transaction…');
-    return api.submitSignedContribution(
-      {
-        prepare_token: prepared.prepare_token,
-        signed_xdr: signed.signedTxXdr,
-      },
-      token
-    );
-  }
-
-  async function submitWithAnchor() {
-    if (!selectedAnchorId) {
-      throw new Error('No deposit anchor is available right now.');
-    }
-
-    const popup = window.open('', 'crowdpay-anchor-deposit', 'popup,width=520,height=780');
-    anchorPopupRef.current = popup;
-
-    setLoadingLabel('Preparing deposit flow…');
-    const session = await api.startAnchorDeposit(
-      {
-        campaign_id: campaign.id,
-        amount: destAmount,
-        anchor_id: selectedAnchorId,
-      },
-      token
-    );
-
-    if (popup && !popup.closed) {
-      popup.location.href = session.interactive_url;
-    } else {
-      window.open(session.interactive_url, '_blank', 'noopener,noreferrer');
-    }
-
-    setAnchorSession(session);
-    setPhase('anchor');
-  }
+    modal.addEventListener('keydown', trapTab);
+    return () => modal.removeEventListener('keydown', trapTab);
+  }, [phase]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -407,6 +235,7 @@ export default function ContributeModal({ campaign, onClose, onSuccess }) {
     <div className="modal-overlay" style={styles.overlay} onClick={handleClose} role="presentation">
       <div
         className="modal-shell"
+        ref={modalRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="contribute-title"

@@ -96,15 +96,28 @@ export default function CampaignCard({ campaign }) {
           )}
         </div>
         <h3 style={styles.title}>{campaign.title}</h3>
+        {campaign.creator_name && (
+          <p style={styles.creator}>by {campaign.creator_name}</p>
+        )}
         <p style={styles.desc}>
           {campaign.description?.slice(0, 100)}
           {campaign.description?.length > 100 ? "…" : ""}
         </p>
-        <div style={styles.bar}>
+
+        <div
+          role="progressbar"
+          aria-valuenow={Number(pct)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={`${pct}% of goal funded`}
+          style={styles.bar}
+        >
           <div
             style={{ ...styles.fill, background: fillColor, width: `${pct}%` }}
+            aria-hidden="true"
           />
         </div>
+
         {deadline && (
           <span
             style={{
@@ -163,20 +176,16 @@ const styles = {
     color: "var(--color-success-text)",
     marginBottom: "0.45rem",
   },
-  updateBadge: {
-    fontSize: "0.72rem",
-    fontWeight: 800,
-    color: "#92400e",
-    background: "#fef3c7",
-    border: "1px solid #f59e0b",
-    borderRadius: "99px",
-    padding: "2px 8px",
-  },
   title: {
     fontSize: "1.05rem",
     fontWeight: 700,
     marginBottom: "0.4rem",
     color: "var(--color-text-primary)",
+  },
+  creator: {
+    fontSize: "0.8rem",
+    color: "var(--color-text-hint)",
+    marginBottom: "0.4rem",
   },
   desc: {
     fontSize: "0.875rem",
@@ -233,9 +242,17 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
   },
+  updateBadge: {
+    fontSize: "0.72rem",
+    fontWeight: 800,
+    color: "#92400e",
+    background: "#fef3c7",
+    border: "1px solid #f59e0b",
+    borderRadius: "99px",
+    padding: "2px 8px",
+  },
   coverPlaceholderText: {
     color: "#6d28d9",
     fontWeight: 700,
-    fontSize: "0.85rem",
   },
 };

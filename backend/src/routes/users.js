@@ -82,6 +82,19 @@ router.get('/me/stats', requireAuth, asyncHandler(async (req, res) => {
   res.json(rows[0]);
 }));
 
+const { getCampaignBalance } = require('../services/stellarService');
+
+router.get('/me/balance', requireAuth, asyncHandler(async (req, res) => {
+  const { rows } = await db.query(
+    'SELECT wallet_public_key FROM users WHERE id = $1',
+    [req.user.userId]
+  );
+  if (!rows.length) return res.status(404).json({ error: 'User not found' });
+
+  const balance = await getCampaignBalance(rows[0].wallet_public_key);
+  res.json({ balance, public_key: rows[0].wallet_public_key });
+}));
+
 router.get('/me/contributions', requireAuth, asyncHandler(async (req, res) => {
   const rows = await listUserContributions(req.user.userId);
   if (rows === null) return res.status(404).json({ error: 'User not found' });

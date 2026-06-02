@@ -1,15 +1,18 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link, useParams, useLocation } from "react-router-dom";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import ContributeModal from "../components/ContributeModal";
 import DisputeModal from "../components/DisputeModal";
+import TransactionHistory from "../components/TransactionHistory";
 import MilestoneTracker from "../components/MilestoneTracker";
 import WithdrawalsSection from "../components/WithdrawalsSection";
 import CampaignDetailSkeleton from "../components/skeletons/CampaignDetailSkeleton";
 import ContributionListSkeleton from "../components/skeletons/ContributionListSkeleton";
 import VerificationBadge from "../components/VerificationBadge";
 import CampaignStatusBadge from "../components/CampaignStatusBadge";
+import { stellarExpertTxUrl } from "../config/stellar";
+import CampaignQRCode from "../components/CampaignQRCode";
 
 function escapeHtml(text) {
   return text
@@ -42,7 +45,86 @@ function progressColor(pct, status) {
   return "#7c3aed"; // default purple
 }
 
+function ContributionRow({ c }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(c.sender_public_key);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div style={styles.row}>
+      <div
+        style={{
+          minWidth: 0,
+          display: "flex",
+          alignItems: "center",
+          gap: "0.75rem",
+        }}
+      >
+        <div style={styles.avatar}>
+          {(c.display_name || "A")[0].toUpperCase()}
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <div style={styles.sender}>{c.display_name || "Anonymous"}</div>
+          <div style={styles.convHint}>
+            <button
+              type="button"
+              onClick={handleCopy}
+              title="Copy full public key"
+              style={{
+                background: "none",
+                border: "none",
+                color: "inherit",
+                fontFamily: "monospace",
+                fontSize: "inherit",
+                cursor: "pointer",
+                padding: 0,
+              }}
+            >
+              {c.sender_public_key.slice(0, 4)}…{c.sender_public_key.slice(-4)}
+            </button>
+            {" • "}
+            {new Date(c.created_at).toLocaleDateString(undefined, {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })}
+          </div>
+          {c.refund_status && (
+            <div style={styles.refundTag}>
+              {c.refund_status === "pending" && "Refund pending"}
+              {c.refund_status === "submitted" && "Refunded"}
+              {c.refund_status === "indexed" && "Refunded"}
+              {c.refund_status === "failed" && "Refund failed"}
+              {c.refund_status === "denied" && "Refund denied"}
+            </div>
+          )}
+          {c.tx_hash && (
+            <a
+              href={stellarExpertTxUrl(c.tx_hash)}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ fontSize: "0.75rem", color: "#7c3aed", fontWeight: 600 }}
+            >
+              View on chain ↗
+            </a>
+          )}
+        </div>
+      </div>
+      {c.amount != null && (
+        <span style={styles.amount}>
+          {Number(c.amount).toLocaleString()} {c.asset}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export default function Campaign() {
+  const contributeBtnRef = useRef(null);
   const { id } = useParams();
   const location = useLocation();
   const { user, token } = useAuth();
@@ -73,6 +155,7 @@ export default function Campaign() {
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteError, setInviteError] = useState("");
   const [inviteSuccess, setInviteSuccess] = useState(false);
+  const [showQR, setShowQR] = useState(false);
   const [showEmbedSection, setShowEmbedSection] = useState(false);
   const [embedCopied, setEmbedCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -87,6 +170,7 @@ export default function Campaign() {
   const [editLoading, setEditLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("contributions");
   const [editingUpdateId, setEditingUpdateId] = useState(null);
+  const [analytics, setAnalytics] = useState(null);
   useEffect(() => {
     setLoadError("");
     api
@@ -122,6 +206,10 @@ export default function Campaign() {
       .getCampaignUpdates(id, { limit: 20 })
       .then(setUpdates)
       .catch(() => setUpdates([]));
+    api
+      .getCampaignAnalytics(id)
+      .then(setAnalytics)
+      .catch(() => setAnalytics(null));
   }, [id, token, contributed, showAll]);
 
   useEffect(() => {
@@ -611,13 +699,21 @@ export default function Campaign() {
             </div>
           </div>
         </div>
-        <div style={styles.bar}>
+        <div
+          role="progressbar"
+          aria-valuenow={Number(pct)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={`${pct}% of goal raised`}
+          style={styles.bar}
+        >
           <div
             style={{
               ...styles.fill,
               background: progressColor(parseFloat(pct), campaign.status),
               width: `${pct}%`,
             }}
+            aria-hidden="true"
           />
         </div>
 
@@ -648,6 +744,8 @@ export default function Campaign() {
               type="button"
               className="btn-primary"
               style={styles.cta}
+              ref={contributeBtnRef}
+              aria-label={`Contribute to ${campaign.title}`}
               onClick={() => setShowModal(true)}
             >
               Contribute
@@ -835,6 +933,30 @@ export default function Campaign() {
         <code style={styles.walletKey}>{campaign.wallet_public_key}</code>
       </div>
 
+      <div style={{ marginBottom: "1.75rem" }}>
+        <button
+          type="button"
+          className="btn-secondary"
+          onClick={() => setShowQR((v) => !v)}
+        >
+          {showQR ? "Hide QR code" : "Show QR code"}
+        </button>
+        {showQR && (
+          <div
+            style={{
+              marginTop: "1rem",
+              display: "flex",
+              justifyContent: "center",
+            }}
+          >
+            <CampaignQRCode
+              url={`${window.location.origin}/campaigns/${id}`}
+              size={200}
+            />
+          </div>
+        )}
+      </div>
+
       {/* Report a problem — visible to contributors who have backed this campaign */}
       {user &&
         contributions?.some((c) => c.sender_public_key) &&
@@ -1003,11 +1125,15 @@ export default function Campaign() {
         </div>
       )}
 
+      <TransactionHistory
+        campaignId={campaign.id}
+        isCreator={!!(user?.id && campaign.creator_id === user.id)}
+      />
+
       <MilestoneTracker
         milestones={milestones}
         assetType={campaign.asset_type}
       />
-
       {isOwner && (
         <div style={{ marginBottom: "2rem" }}>
           <h2 style={styles.sectionTitle}>Team Management</h2>
@@ -1213,6 +1339,106 @@ export default function Campaign() {
         </button>
       </div>
 
+      {/* Analytics Section */}
+      {analytics && (
+        <div style={{ marginBottom: "2rem" }}>
+          <h2 style={styles.sectionTitle}>Analytics</h2>
+          {!analytics.dailyTotals || analytics.dailyTotals.length === 0 ? (
+            <p style={{ color: "var(--color-text-muted)" }}>
+              No analytics data available yet.
+            </p>
+          ) : (
+            <div style={{ display: "grid", gap: "1.5rem" }}>
+              <div className="campaign-card">
+                <strong style={{ display: "block", marginBottom: "1rem" }}>
+                  Contributions (Last 30 Days)
+                </strong>
+                <svg
+                  width="100%"
+                  height={150}
+                  viewBox={`0 0 600 150`}
+                  preserveAspectRatio="none"
+                >
+                  {analytics.dailyTotals.map((day, i) => {
+                    const maxAmount = Math.max(
+                      ...analytics.dailyTotals.map(
+                        (d) => Number(d.total_amount) || 0,
+                      ),
+                      1,
+                    );
+                    const barWidth =
+                      600 / Math.max(analytics.dailyTotals.length, 1);
+                    const barHeight = Math.max(
+                      5,
+                      (Number(day.total_amount) / maxAmount) * 150,
+                    );
+                    const y = 150 - barHeight;
+                    const x = i * barWidth;
+                    return (
+                      <g key={i}>
+                        <title>{`${new Date(day.day).toLocaleDateString()}: ${day.total_amount} ${day.asset}`}</title>
+                        <rect
+                          x={x}
+                          y={y}
+                          width={Math.max(barWidth - 2, 2)}
+                          height={barHeight}
+                          fill="var(--color-accent)"
+                          rx="2"
+                        />
+                      </g>
+                    );
+                  })}
+                </svg>
+              </div>
+
+              <div className="campaign-card">
+                <strong style={{ display: "block", marginBottom: "1rem" }}>
+                  Asset Breakdown
+                </strong>
+                {analytics.assetBreakdown.map((asset) => (
+                  <div
+                    key={asset.paid_with}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      marginBottom: "0.5rem",
+                    }}
+                  >
+                    <span>{asset.paid_with}</span>
+                    <strong>{asset.total_sent}</strong>
+                  </div>
+                ))}
+              </div>
+
+              <div className="campaign-card">
+                <strong style={{ display: "block", marginBottom: "1rem" }}>
+                  Top Contributors
+                </strong>
+                {analytics.topContributors.map((c, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      marginBottom: "0.5rem",
+                      fontFamily: "monospace",
+                    }}
+                  >
+                    <span>
+                      {c.sender_public_key.slice(0, 4)}...
+                      {c.sender_public_key.slice(-4)}
+                    </span>
+                    <span>
+                      {c.total} ({c.times} contributions)
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {activeTab === "updates" && (
         <section role="tabpanel" style={{ marginBottom: "1.5rem" }}>
           {canPostUpdate && (
@@ -1406,44 +1632,7 @@ export default function Campaign() {
             <>
               <div style={styles.list}>
                 {contributions.map((c) => (
-                  <div key={c.id} style={styles.row}>
-                    <div
-                      style={{
-                        minWidth: 0,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.75rem",
-                      }}
-                    >
-                      <div style={styles.avatar}>
-                        {(c.display_name || "A")[0].toUpperCase()}
-                      </div>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={styles.sender}>
-                          {c.display_name || "Anonymous"}
-                        </div>
-                        <div style={styles.convHint}>
-                          {c.sender_public_key.slice(0, 4)}…
-                          {c.sender_public_key.slice(-4)} •{" "}
-                          {new Date(c.created_at).toLocaleDateString()}
-                        </div>
-                        {c.refund_status && (
-                          <div style={styles.refundTag}>
-                            {c.refund_status === "pending" && "Refund pending"}
-                            {c.refund_status === "submitted" && "Refunded"}
-                            {c.refund_status === "indexed" && "Refunded"}
-                            {c.refund_status === "failed" && "Refund failed"}
-                            {c.refund_status === "denied" && "Refund denied"}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    {c.amount != null && (
-                      <span style={styles.amount}>
-                        {Number(c.amount).toLocaleString()} {c.asset}
-                      </span>
-                    )}
-                  </div>
+                  <ContributionRow key={c.id} c={c} />
                 ))}
               </div>
 
@@ -1477,7 +1666,10 @@ export default function Campaign() {
       {showModal && (
         <ContributeModal
           campaign={campaign}
-          onClose={() => setShowModal(false)}
+          onClose={() => {
+            setShowModal(false);
+            contributeBtnRef.current?.focus();
+          }}
           onSuccess={() => setContributed((v) => !v)}
         />
       )}

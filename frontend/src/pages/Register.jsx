@@ -27,6 +27,8 @@ export default function Register() {
   const [freighterPublicKey, setFreighterPublicKey] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   function set(field) { return (e) => setForm((f) => ({ ...f, [field]: e.target.value })); }
 
@@ -106,7 +108,39 @@ export default function Register() {
       <form noValidate onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
         <input placeholder="Full name" value={form.name} onChange={set('name')} required />
         <input type="email" placeholder="Email" value={form.email} onChange={set('email')} required />
-        <input type="password" placeholder="Password" value={form.password} onChange={set('password')} required minLength={8} autoComplete="new-password" />
+        <div style={{ position: 'relative' }}>
+          <input
+            id="reg-password"
+            type={showPassword ? 'text' : 'password'}
+            placeholder="Password"
+            value={form.password}
+            onChange={set('password')}
+            required
+            minLength={8}
+            autoComplete="new-password"
+            style={{ paddingRight: '2.5rem', width: '100%' }}
+          />
+          <button
+            type="button"
+            aria-label={showPassword ? 'Hide password' : 'Show password'}
+            onClick={() => setShowPassword((v) => !v)}
+            style={{
+              position: 'absolute',
+              right: '0.6rem',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: '#888',
+              padding: '0.2rem',
+              minHeight: 'auto',
+              fontSize: '0.85rem',
+            }}
+          >
+            {showPassword ? 'Hide' : 'Show'}
+          </button>
+        </div>
         {form.password && (() => {
           const s = passwordStrength(form.password);
           return (
@@ -118,16 +152,37 @@ export default function Register() {
             </div>
           );
         })()}
-        <div className="form-stack">
+        <div className="form-stack" style={{ position: 'relative' }}>
           <label className="label-strong" htmlFor="reg-confirm">Confirm password</label>
           <input
             id="reg-confirm"
-            type="password"
+            type={showConfirmPassword ? 'text' : 'password'}
             value={form.confirmPassword}
             onChange={set('confirmPassword')}
             required
             autoComplete="new-password"
+            style={{ paddingRight: '2.5rem' }}
           />
+          <button
+            type="button"
+            aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+            onClick={() => setShowConfirmPassword((v) => !v)}
+            style={{
+              position: 'absolute',
+              right: '0.6rem',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: '#888',
+              padding: '0.2rem',
+              minHeight: 'auto',
+              fontSize: '0.85rem',
+            }}
+          >
+            {showConfirmPassword ? 'Hide' : 'Show'}
+          </button>
         </div>
         <select value={form.role} onChange={set('role')} aria-label="Account role">
           <option value="contributor">Contributor</option>

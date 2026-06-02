@@ -23,21 +23,35 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let active = true;
 
-    async function restoreSession() {
+    async function validateAndRefreshUser() {
+      const storedToken = localStorage.getItem('cp_token');
+      if (!storedToken) {
+        if (active) {
+          setReady(true);
+        }
+        return;
+      }
+
       try {
-        const data = await api.refresh();
+        // Validate stored token and refresh user data from server via GET /users/me
+        const userData = await api.getMe();
         if (!active) return;
-        if (data.user) {
-          setUser(data.user);
-          localStorage.setItem('cp_user', JSON.stringify(data.user));
+        if (userData && userData.id) {
+          // Backend returns user data directly (not wrapped in { user: ... })
+          setUser(userData);
+          localStorage.setItem('cp_user', JSON.stringify(userData));
         } else {
           setUser(null);
           localStorage.removeItem('cp_user');
         }
-      } catch {
+      } catch (err) {
         if (!active) return;
-        setUser(null);
-        localStorage.removeItem('cp_user');
+        // If token is invalid, expired, or user was deleted, silently log out
+        if (err.status === 401 || err.status === 404) {
+          setUser(null);
+          localStorage.removeItem('cp_user');
+          localStorage.removeItem('cp_token');
+        }
       } finally {
         if (active) {
           setReady(true);
@@ -45,7 +59,7 @@ export function AuthProvider({ children }) {
       }
     }
 
-    restoreSession();
+    validateAndRefreshUser();
 
     return () => {
       active = false;

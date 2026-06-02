@@ -1,6 +1,16 @@
-const BASE = "/api";
-
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(
+  /\/+$/,
+  "",
+);
+const BASE = `${API_BASE_URL}/api`;
 let refreshPromise = null;
+
+const TIMEOUTS = {
+  GET: 10_000,
+  POST: 20_000,
+  PATCH: 15_000,
+  DELETE: 10_000,
+};
 
 function jsonHeaders() {
   return {
@@ -9,22 +19,42 @@ function jsonHeaders() {
 }
 
 async function request(method, path, body, options = {}) {
-  const { query, _retry = false } = options;
+  const { query, _retry = false } = options || {};
   let url = `${BASE}${path}`;
+
   if (query && Object.keys(query).length) {
     const params = new URLSearchParams();
     Object.entries(query).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && v !== "") params.set(k, String(v));
+      if (v !== undefined && v !== null && v !== "") {
+        params.set(k, String(v));
+      }
     });
     url += `?${params.toString()}`;
   }
 
-  const res = await fetch(url, {
-    method,
-    headers: body ? jsonHeaders() : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-    credentials: "include",
-  });
+  const controller = new AbortController();
+  const timeoutMs = TIMEOUTS[method] ?? 15_000;
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  let res;
+  try {
+    res = await fetch(url, {
+      method,
+      headers: body ? jsonHeaders() : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+      credentials: "include",
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err.name === "AbortError") {
+      throw new Error(
+        "Request timed out. Check your connection and try again.",
+      );
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 
   const text = await res.text();
   let data = {};
@@ -42,6 +72,7 @@ async function request(method, path, body, options = {}) {
     "/auth/forgot-password",
     "/auth/reset-password",
   ];
+
   if (res.status === 401 && !_retry && !publicAuthPaths.includes(path)) {
     const promise = refresh();
     if (promise) {
@@ -60,12 +91,15 @@ async function request(method, path, body, options = {}) {
       typeof errorBody === "string"
         ? errorBody
         : errorBody?.message || `Request failed (${res.status})`;
+
     const err = new Error(message);
     err.status = res.status;
+
     if (errorBody && typeof errorBody === "object") {
       err.code = errorBody.code;
       err.fields = errorBody.fields;
     }
+
     throw err;
   }
 
@@ -74,6 +108,7 @@ async function request(method, path, body, options = {}) {
 
 async function uploadFormData(path, formData) {
   const url = `${BASE}${path}`;
+
   const res = await fetch(url, {
     method: "POST",
     body: formData,
@@ -96,12 +131,15 @@ async function uploadFormData(path, formData) {
       typeof errorBody === "string"
         ? errorBody
         : errorBody?.message || `Request failed (${res.status})`;
+
     const err = new Error(message);
     err.status = res.status;
+
     if (errorBody && typeof errorBody === "object") {
       err.code = errorBody.code;
       err.fields = errorBody.fields;
     }
+
     throw err;
   }
 
@@ -159,6 +197,7 @@ async function logout() {
 
 export const api = {
   getPlatformConfig: () => request("GET", "/config"),
+
   register: (body) => request("POST", "/auth/register", body),
   login: (body) => request("POST", "/auth/login", body),
   forgotPassword: (body) => request("POST", "/auth/forgot-password", body),
@@ -166,20 +205,23 @@ export const api = {
   logout: () => logout(),
   refresh,
 
-  getMyCampaigns: () => request("GET", "/campaigns/mine"),
+  getMe: () => request("GET", "/users/me"),
+  getMyBalance: () => request("GET", "/users/me/balance"),
   getMyStats: () => request("GET", "/users/me/stats"),
   getMyContributions: () => request("GET", "/contributions/mine"),
-  getMe: () => request("GET", "/users/me"),
   startKyc: () => request("POST", "/users/me/kyc/start"),
 
+  getMyCampaigns: () => request("GET", "/campaigns/mine"),
   getCampaigns: (options = {}) =>
     request("GET", "/campaigns", null, { query: options }),
   getCampaign: (id) => request("GET", `/campaigns/${id}`),
+  getCampaignAnalytics: (id) => request("GET", `/campaigns/${id}/analytics`),
   getCampaignEmbed: (id) => request("GET", `/campaigns/${id}/embed`),
   getCampaignBackers: (id) => request("GET", `/campaigns/${id}/backers`),
   getCampaignBalance: (id) => request("GET", `/campaigns/${id}/balance`),
   createCampaign: (body) => request("POST", "/campaigns", body),
   updateCampaign: (id, body) => request("PATCH", `/campaigns/${id}`, body),
+
   uploadCampaignCoverImage: (campaignId, file) => {
     const formData = new FormData();
     formData.append("cover_image", file);
@@ -188,6 +230,7 @@ export const api = {
       formData,
     );
   },
+
   getCampaignMembers: (campaignId) =>
     request("GET", `/campaigns/${campaignId}/members`),
   inviteCampaignMember: (campaignId, body) =>
@@ -198,20 +241,15 @@ export const api = {
     request("DELETE", `/campaigns/${campaignId}/members/${userId}`),
   acceptCampaignInvitation: (campaignId, body) =>
     request("POST", `/campaigns/${campaignId}/members/accept`, body),
-  getAnchorInfo: () => request("GET", "/anchor/info"),
-  startAnchorDeposit: (body) => request("POST", "/anchor/deposits/start", body),
-  getAnchorDepositStatus: (id) => request("GET", `/anchor/deposits/${id}`),
+
   getCampaignUpdates: (campaignId, options = {}) =>
     request("GET", `/campaigns/${campaignId}/updates`, null, {
       query: options,
     }),
-
   postCampaignUpdate: (campaignId, body) =>
     request("POST", `/campaigns/${campaignId}/updates`, body),
-
   updateCampaignUpdate: (campaignId, updateId, body) =>
     request("PATCH", `/campaigns/${campaignId}/updates/${updateId}`, body),
-
   deleteCampaignUpdate: (campaignId, updateId) =>
     request("DELETE", `/campaigns/${campaignId}/updates/${updateId}`),
 
@@ -219,6 +257,18 @@ export const api = {
     request("GET", `/contributions/campaign/${campaignId}`, null, {
       query: options,
     }),
+  contribute: (body) => request("POST", "/contributions", body),
+  prepareContribution: (body) =>
+    request("POST", "/contributions/prepare", body),
+  submitSignedContribution: (body) =>
+    request("POST", "/contributions/submit-signed", body),
+  quoteContribution: ({ send_asset, dest_asset, dest_amount }) =>
+    request("GET", "/contributions/quote", null, {
+      query: { send_asset, dest_asset, dest_amount },
+    }),
+  getContributionFinalization: (txHash) =>
+    request("GET", `/contributions/finalization/${txHash}`),
+
   getMilestones: (campaignId) =>
     request("GET", `/campaigns/${campaignId}/milestones`),
   setCampaignMilestones: (campaignId, milestones) =>
@@ -229,40 +279,14 @@ export const api = {
     request("POST", `/milestones/${id}/release`, body || {}),
   rejectMilestone: (id, body) =>
     request("POST", `/milestones/${id}/reject`, body || {}),
-  contribute: (body) => request("POST", "/contributions", body),
-  prepareContribution: (body) =>
-    request("POST", "/contributions/prepare", body),
-  submitSignedContribution: (body) =>
-    request("POST", "/contributions/submit-signed", body),
-  quoteContribution: ({ send_asset, dest_asset, dest_amount }) =>
-    request("GET", "/contributions/quote", null, {
-      query: { send_asset, dest_asset, dest_amount },
-    }),
-  getContributionFinalization: (txHash, token) =>
-    request("GET", `/contributions/finalization/${txHash}`, null, token),
-  failExpiredCampaigns: (token) =>
-    request("POST", "/campaigns/cron/fail-expired", null, token),
-  triggerCampaignRefunds: (campaignId, token) =>
-    request("POST", `/campaigns/${campaignId}/trigger-refunds`, null, token),
 
-  getWithdrawalCapabilities: (token) =>
-    request("GET", "/withdrawals/capabilities", null, token),
-  listWithdrawals: (campaignId, token) =>
-    request("GET", `/withdrawals/campaign/${campaignId}`, null, token),
-  requestWithdrawal: (body, token) =>
-    request("POST", "/withdrawals/request", body, token),
-  approveWithdrawalCreator: (id, token, body) =>
-    request("POST", `/withdrawals/${id}/approve/creator`, body || {}, token),
-  approveWithdrawalPlatform: (id, token) =>
-    request("POST", `/withdrawals/${id}/approve/platform`, {}, token),
-  cancelWithdrawal: (id, body, token) =>
-    request("POST", `/withdrawals/${id}/cancel`, body || {}, token),
-  rejectWithdrawal: (id, body, token) =>
-    request("POST", `/withdrawals/${id}/reject`, body || {}, token),
-  getWithdrawalEvents: (id, token) =>
-    request("GET", `/withdrawals/${id}/events`, null, token),
-  getWithdrawal: (id, token) =>
-    request("GET", `/withdrawals/${id}`, null, token),
+  getAnchorInfo: () => request("GET", "/anchor/info"),
+  startAnchorDeposit: (body) => request("POST", "/anchor/deposits/start", body),
+  getAnchorDepositStatus: (id) => request("GET", `/anchor/deposits/${id}`),
+
+  failExpiredCampaigns: () => request("POST", "/campaigns/cron/fail-expired"),
+  triggerCampaignRefunds: (campaignId) =>
+    request("POST", `/campaigns/${campaignId}/trigger-refunds`),
 
   getWithdrawalCapabilities: () => request("GET", "/withdrawals/capabilities"),
   listWithdrawals: (campaignId) =>
@@ -308,9 +332,11 @@ export const api = {
   adminUnbanUser: (id) => request("PATCH", `/admin/users/${id}/unban`, {}),
   adminPromoteUser: (id) => request("PATCH", `/admin/users/${id}/promote`, {}),
   adminDemoteUser: (id) => request("PATCH", `/admin/users/${id}/demote`, {}),
+
   listApiKeys: () => request("GET", "/api-keys"),
   createApiKey: (body) => request("POST", "/api-keys", body),
   deleteApiKey: (id) => request("DELETE", `/api-keys/${id}`),
+
   listWebhooks: () => request("GET", "/webhooks"),
   createWebhook: (body) => request("POST", "/webhooks", body),
   listWebhookDeliveries: (options = {}) =>

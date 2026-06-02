@@ -440,19 +440,12 @@ router.get(
      *         description: Not found
      */
     const query = `
-  SELECT c.*,
-         u.name AS creator_name,
-         u.kyc_status AS creator_kyc_status,
-         (SELECT MAX(cu.created_at) FROM campaign_updates cu WHERE cu.campaign_id = c.id) AS latest_update_at,
-         (SELECT COUNT(*)::int FROM campaign_updates cu WHERE cu.campaign_id = c.id) AS update_count,
-         (SELECT COUNT(DISTINCT sender_public_key)::int FROM contributions con WHERE con.campaign_id = c.id) AS contributor_count
-  FROM campaigns c
-  JOIN users u ON u.id = c.creator_id
-  ${whereClause}
-  ORDER BY ${orderBy}
-  LIMIT $${params.length + 1}
-  OFFSET $${params.length + 2}
-`;
+    SELECT c.*, u.name AS creator_name,
+           (SELECT COUNT(DISTINCT sender_public_key)::int FROM contributions WHERE campaign_id = $1) AS contributor_count
+    FROM campaigns c
+    JOIN users u ON u.id = c.creator_id
+    WHERE c.id = $1
+  `;
     await refreshCampaignStatus(req.params.id);
     const { rows } = await db.query(query, [req.params.id]);
     if (!rows.length)
@@ -857,6 +850,25 @@ router.post(
       min_contribution,
       max_contribution,
     } = req.body;
+
+    if (deadline) {
+      const [year, month, day] = String(deadline).split("-").map(Number);
+      const deadlineDate = new Date(year, month - 1, day);
+      const todayDate = new Date();
+      todayDate.setHours(0, 0, 0, 0);
+
+      if (
+        Number.isNaN(deadlineDate.getTime()) ||
+        deadlineDate.getFullYear() !== year ||
+        deadlineDate.getMonth() + 1 !== month ||
+        deadlineDate.getDate() !== day ||
+        deadlineDate < todayDate
+      ) {
+        return res
+          .status(400)
+          .json({ error: "deadline must be a future date" });
+      }
+    }
 
     let normalizedMilestones;
     try {
@@ -1362,6 +1374,55 @@ router.post(
     );
 
     res.json(rows[0]);
+  }),
+);
+
+// GET /campaigns/:id/analytics — campaign analytics
+router.get(
+  "/:id/analytics",
+  asyncHandler(async (req, res) => {
+    const { rows: dailyTotals } = await db.query(
+      `
+    SELECT
+      DATE(created_at) AS day,
+      COUNT(*)          AS contribution_count,
+      SUM(amount)       AS total_amount,
+      asset
+    FROM contributions
+    WHERE campaign_id = $1
+      AND created_at >= NOW() - INTERVAL '30 days'
+    GROUP BY DATE(created_at), asset
+    ORDER BY day ASC
+  `,
+      [req.params.id],
+    );
+
+    const { rows: assetBreakdown } = await db.query(
+      `
+    SELECT
+      COALESCE(source_asset, asset) AS paid_with,
+      COUNT(*)      AS count,
+      SUM(COALESCE(source_amount, amount)) AS total_sent
+    FROM contributions
+    WHERE campaign_id = $1
+    GROUP BY paid_with
+  `,
+      [req.params.id],
+    );
+
+    const { rows: topContributors } = await db.query(
+      `
+    SELECT sender_public_key, SUM(amount) AS total, COUNT(*) AS times
+    FROM contributions
+    WHERE campaign_id = $1
+    GROUP BY sender_public_key
+    ORDER BY total DESC
+    LIMIT 5
+  `,
+      [req.params.id],
+    );
+
+    res.json({ dailyTotals, assetBreakdown, topContributors });
   }),
 );
 

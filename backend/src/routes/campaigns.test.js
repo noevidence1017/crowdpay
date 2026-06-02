@@ -194,6 +194,37 @@ test('POST /api/campaigns returns 400 with validation errors for invalid payload
   assert.ok(response.body.errors.length >= 1);
 });
 
+test('POST /api/campaigns returns 400 for past deadline', async () => {
+  process.env.KYC_REQUIRED_FOR_CAMPAIGNS = 'false';
+  const app = buildApp({
+    authUser: { userId: 'creator-1', role: 'creator' },
+    queryImpl: async (text) => {
+      if (text.includes('SELECT email, wallet_public_key, kyc_status FROM users')) {
+        return { rows: [{ email: 'creator@test.com', wallet_public_key: 'GCREATOR', kyc_status: 'verified' }] };
+      }
+      return { rows: [] };
+    },
+    buildWithdrawalTransactionImpl: async () => '',
+    insertWithdrawalPendingSignaturesImpl: async () => 'tx-row',
+  });
+
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const pastDeadline = yesterday.toISOString().split('T')[0];
+
+  const response = await request(app)
+    .post('/api/campaigns')
+    .set('Authorization', 'Bearer token')
+    .send({ title: 'Old deadline', target_amount: '100', asset_type: 'USDC', deadline: pastDeadline });
+
+  assert.equal(response.status, 400);
+  assert.ok(Array.isArray(response.body.errors) || response.body.error);
+  assert.ok(
+    (response.body.errors || []).some((error) => String(error.msg || error).toLowerCase().includes('deadline must be in the future')) ||
+    String(response.body.error).toLowerCase().includes('deadline must be a future date')
+  );
+});
+
 test('POST /api/campaigns/:id/trigger-refunds creates refund requests for contributions', async () => {
   const created = [];
   const queryImpl = async (text, params) => {
