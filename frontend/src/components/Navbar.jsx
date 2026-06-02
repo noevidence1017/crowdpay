@@ -27,6 +27,7 @@ export default function Navbar() {
           {user ? (
             <>
               <Link to="/campaigns/new" style={styles.link} aria-current={pathname === '/campaigns/new' ? 'page' : undefined}>Start Campaign</Link>
+              <Link to="/profile" style={styles.link} aria-current={pathname === '/profile' ? 'page' : undefined}>Profile</Link>
               <span style={styles.name} aria-hidden="true">{user.name}</span>
               <button onClick={handleLogout} className="btn-secondary" style={{ padding: '0.4rem 0.9rem' }}>
                 Logout
