@@ -133,12 +133,12 @@ These are scoped, well-described tasks that don't require deep knowledge of the 
 
 ## Code Style
 
-| Layer    | Style                                      |
-|----------|--------------------------------------------|
-| Backend  | 2-space indentation, single quotes, semicolons |
-| Frontend | Same — consistent with existing files      |
+| Layer    | Command                    | Style                                      |
+|----------|----------------------------|--------------------------------------------|
+| Backend  | `npm run lint --prefix backend` | 2-space indentation, single quotes, semicolons |
+| Frontend | `npm run lint --prefix frontend` | Same — consistent with existing files      |
 
-Match whatever the surrounding file already uses. A linter is not yet configured — see [#93](https://github.com/Savitura/crowdpay/issues/93) for the planned CI setup.
+Match whatever the surrounding file already uses. Run the linter before committing.
 
 ---
 
