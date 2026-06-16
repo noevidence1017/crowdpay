@@ -5,7 +5,8 @@ import { api } from '../services/api';
 import KycPrompt from '../components/KycPrompt';
 import VerificationBadge from '../components/VerificationBadge';
 import CampaignStatusBadge from '../components/CampaignStatusBadge';
-import { stellarExpertTxUrl } from '../config/stellar';
+import DepositModal from '../components/DepositModal';
+import { stellarExpertTxUrl, stellarExpertAccountUrl } from '../config/stellar';
 
 const TABS = [
   { id: 'campaigns', label: 'My Campaigns' },
@@ -28,7 +29,7 @@ function formatConversionRate(row) {
 }
 
 export default function Dashboard() {
-  const { user, ready, updateUser } = useAuth();
+  const { user, token, ready, updateUser } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
   const activeTab = tabParam === 'contributions' ? 'contributions' : 'campaigns';
@@ -39,6 +40,9 @@ export default function Dashboard() {
   const [loadingCampaigns, setLoadingCampaigns] = useState(true);
   const [loadingContributions, setLoadingContributions] = useState(true);
   const [error, setError] = useState('');
+  const [balance, setBalance] = useState(null);
+  const [balanceLoading, setBalanceLoading] = useState(true);
+  const [showDepositModal, setShowDepositModal] = useState(false);
 
   const isCreator = user?.role === 'creator' || user?.role === 'admin';
   const kycRequired =
@@ -49,6 +53,9 @@ export default function Dashboard() {
     if (!user) return;
     setLoadingCampaigns(true);
     setError('');
+
+    api.getMyBalance().then((d) => setBalance(d.balance)).catch(() => {}).finally(() => setBalanceLoading(false));
+
     const requests = [api.getMyContributions()];
     if (isCreator) {
       requests.unshift(api.getMe(), api.getMyStats(), api.getMyCampaigns());
@@ -71,7 +78,7 @@ export default function Dashboard() {
         setLoadingCampaigns(false);
         setLoadingContributions(false);
       });
-  }, [token, user?.role, updateUser]);
+  }, [user?.role, updateUser]);
 
   function setTab(tabId) {
     if (tabId === 'contributions') {
@@ -95,6 +102,40 @@ export default function Dashboard() {
   return (
     <main className="container" style={{ paddingTop: '2rem', paddingBottom: '3rem' }}>
       <h1 style={{ fontSize: '1.6rem', fontWeight: 800, marginBottom: '1rem' }}>Dashboard</h1>
+
+      <div className="campaign-card" style={{ marginBottom: '1rem', minHeight: 'auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div>
+            <strong>Wallet balance</strong>
+            <div style={{ color: 'var(--color-text-hint)', fontSize: '0.88rem', marginTop: '0.2rem' }}>
+              {balanceLoading
+                ? 'Loading…'
+                : balance
+                  ? Object.entries(balance)
+                      .filter(([, v]) => Number(v) > 0)
+                      .map(([code, val]) => `${Number(val).toLocaleString()} ${code}`)
+                      .join(' · ') || 'No funds'
+                  : 'No funds'}
+              {user?.wallet_public_key && (
+                <span style={{ marginLeft: '0.5rem' }}>
+                  ·{' '}
+                  <a
+                    href={stellarExpertAccountUrl(user.wallet_public_key)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: 'var(--color-accent)' }}
+                  >
+                    View on Stellar Expert ↗
+                  </a>
+                </span>
+              )}
+            </div>
+          </div>
+          <button type="button" className="btn-primary" onClick={() => setShowDepositModal(true)}>
+            Add Funds
+          </button>
+        </div>
+      </div>
 
       <div
         role="tablist"
@@ -366,6 +407,15 @@ export default function Dashboard() {
             </div>
           )}
         </section>
+      )}
+
+      {showDepositModal && (
+        <DepositModal
+          onClose={() => setShowDepositModal(false)}
+          onSuccess={() => {
+            api.getMyBalance().then((d) => setBalance(d.balance)).catch(() => {});
+          }}
+        />
       )}
     </main>
   );

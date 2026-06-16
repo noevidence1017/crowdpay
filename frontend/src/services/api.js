@@ -243,6 +243,8 @@ export const api = {
   getAnchorInfo: () => request("GET", "/anchor/info"),
   startAnchorDeposit: (body) => request("POST", "/anchor/deposits/start", body),
   getAnchorDepositStatus: (id) => request("GET", `/anchor/deposits/${id}`),
+  getSep24Assets: () => request("GET", "/anchor/sep24/assets"),
+  startWalletDeposit: (body) => request("POST", "/anchor/sep24/deposit", body),
   getCampaignUpdates: (campaignId, options = {}) =>
     request("GET", `/campaigns/${campaignId}/updates`, null, {
       query: options,
