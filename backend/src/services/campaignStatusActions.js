@@ -1,6 +1,11 @@
 const db = require('../config/database');
 const logger = require('../config/logger');
-const { sendEmail } = require('./emailService');
+const {
+  sendCampaignFundedCreatorEmail,
+  sendCampaignFundedContributorEmail,
+  sendCampaignFailedCreatorEmail,
+  sendCampaignFailedContributorEmail,
+} = require('./emailService');
 const { createNotification } = require('./notifications');
 const {
   emitWebhookEventForUser,
@@ -112,36 +117,24 @@ async function sendFundedEmails(campaign, contributors) {
   const campaignUrl = `${frontendBaseUrl()}/campaigns/${campaign.id}`;
   const creatorName = campaign.creator_name || 'there';
 
-  await sendEmail({
+  await sendCampaignFundedCreatorEmail({
     to: campaign.creator_email,
-    subject: `Your campaign "${campaign.title}" has reached its goal`,
-    text: [
-      `Hi ${creatorName},`,
-      '',
-      `Congratulations! Your campaign "${campaign.title}" has reached its funding goal of ${campaign.target_amount}.`,
-      '',
-      `Total raised: ${campaign.raised_amount}`,
-      '',
-      `View your campaign: ${campaignUrl}`,
-      '',
-      'You can now request a withdrawal from your creator dashboard.',
-    ].join('\n'),
+    campaignId: campaign.id,
+    creatorName,
+    campaignTitle: campaign.title,
+    campaignUrl,
+    targetAmount: campaign.target_amount,
+    raisedAmount: campaign.raised_amount,
   });
 
   await Promise.all(
     contributors.map((contributor) =>
-      sendEmail({
+      sendCampaignFundedContributorEmail({
         to: contributor.email,
-        subject: `Campaign you backed has been fully funded: "${campaign.title}"`,
-        text: [
-          `Hi ${contributor.name || 'there'},`,
-          '',
-          `Great news — "${campaign.title}" has reached its funding goal.`,
-          '',
-          `View the campaign: ${campaignUrl}`,
-          '',
-          'Thank you for backing this campaign on CrowdPay.',
-        ].join('\n'),
+        campaignId: campaign.id,
+        contributorName: contributor.name,
+        campaignTitle: campaign.title,
+        campaignUrl,
       })
     )
   );
@@ -155,39 +148,26 @@ async function sendFailedEmails(campaign, contributors) {
     ? new Date(campaign.deadline).toDateString()
     : 'the deadline';
 
-  await sendEmail({
+  await sendCampaignFailedCreatorEmail({
     to: campaign.creator_email,
-    subject: `Your campaign "${campaign.title}" ended below its goal`,
-    text: [
-      `Hi ${creatorName},`,
-      '',
-      `Your campaign "${campaign.title}" ended on ${deadlineText} without reaching its goal of ${campaign.target_amount}.`,
-      '',
-      `Amount raised: ${campaign.raised_amount}`,
-      '',
-      'Contributors will receive refund instructions automatically.',
-      '',
-      `Campaign page: ${campaignUrl}`,
-    ].join('\n'),
+    campaignId: campaign.id,
+    creatorName,
+    campaignTitle: campaign.title,
+    campaignUrl,
+    targetAmount: campaign.target_amount,
+    raisedAmount: campaign.raised_amount,
+    deadlineText,
   });
 
   await Promise.all(
     contributors.map((contributor) =>
-      sendEmail({
+      sendCampaignFailedContributorEmail({
         to: contributor.email,
-        subject: `Campaign ended — your refund is available: "${campaign.title}"`,
-        text: [
-          `Hi ${contributor.name || 'there'},`,
-          '',
-          `"${campaign.title}" did not reach its funding goal and has ended.`,
-          '',
-          'Your contribution is eligible for a refund. Sign in to CrowdPay to claim your refund:',
-          refundsUrl,
-          '',
-          'Refunds are processed via the Stellar network back to the wallet you contributed from.',
-          '',
-          `Campaign page: ${campaignUrl}`,
-        ].join('\n'),
+        campaignId: campaign.id,
+        contributorName: contributor.name,
+        campaignTitle: campaign.title,
+        campaignUrl,
+        refundsUrl,
       })
     )
   );

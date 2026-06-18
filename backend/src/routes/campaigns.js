@@ -14,7 +14,7 @@ const { emitWebhookEventForUser, WEBHOOK_EVENTS } = require('../services/webhook
 const { refreshCampaignStatus, refreshActiveCampaignStatuses } = require('../services/campaignStatusService');
 const { queueFailedCampaignRefunds } = require('../services/campaignStatusActions');
 const { invokeContract, encodeMilestone, nativeToScVal } = require('../services/sorobanService');
-const { sendEmail } = require('../services/emailService');
+const { sendEmail, sendTeamMemberInvitedEmail } = require('../services/emailService');
 const { uploadCampaignCoverImage } = require('../services/storage');
 const { isKycRequiredForCampaigns } = require('../services/kycProvider');
 const { listCreatorCampaigns } = require('../services/userDashboardService');
@@ -967,10 +967,13 @@ router.post('/:id/members', requireAuth, requireCampaignMember('owner'), asyncHa
 
   const campaignUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/campaigns/${req.params.id}/invite/${inviteToken}`;
   try {
-    await sendEmail({
+    const { rows: titleRows } = await db.query('SELECT title FROM campaigns WHERE id = $1', [req.params.id]);
+    await sendTeamMemberInvitedEmail({
       to: email.trim(),
-      subject: `Invitation to join campaign team`,
-      text: `You have been invited to join a campaign as a ${role}. Click here to accept: ${campaignUrl}`,
+      memberId: memberRows[0].id,
+      campaignTitle: titleRows[0]?.title,
+      role,
+      inviteUrl: campaignUrl,
     });
   } catch (e) {
     logger.error('Failed to send invite email', {

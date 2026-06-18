@@ -27,7 +27,6 @@ const db = require('./config/database');
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
 const rateLimit = require('express-rate-limit');
-const db = require('./config/database');
 
 const app = express();
 
@@ -105,6 +104,7 @@ app.use('/api/webhooks', require('./routes/webhooks'));
 app.use('/api/milestones', require('./routes/milestones'));
 app.use('/api', require('./routes/disputes'));
 app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/emails', require('./routes/emails'));
 
 app.get('/health', async (_, res) => {
   try {
