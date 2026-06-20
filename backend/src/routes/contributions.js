@@ -49,6 +49,27 @@ const contributionPostLimiter = rateLimit({
  *     description: Contribution creation and quoting
  */
 
+async function attributeContributionToReferrer(campaignId, req) {
+  const cookieName = `cp_ref_${campaignId}`;
+  const refCode = req.cookies?.[cookieName];
+  if (!refCode) return;
+
+  try {
+    const { rows } = await db.query(
+      'SELECT id FROM campaign_referrals WHERE referral_code = $1 AND campaign_id = $2',
+      [refCode, campaignId]
+    );
+    if (rows.length) {
+      await db.query(
+        'UPDATE campaign_referrals SET contribution_count = contribution_count + 1 WHERE id = $1',
+        [rows[0].id]
+      );
+    }
+  } catch (err) {
+    logger.warn('Referral attribution failed', { campaign_id: campaignId, error: err.message });
+  }
+}
+
 function validateFreighterPublicKey(publicKey) {
   try {
     Keypair.fromPublicKey(publicKey);
@@ -726,15 +747,6 @@ router.post('/submit-signed', requireAuth, asyncHandler(async (req, res) => {
     });
   }
 
-  setImmediate(() => {
-    sendEmail({
-      to: campaign.creator_email,
-      subject: `New Contribution to ${campaign.title}`,
-      text: `You just received a contribution of ${amount} ${send_asset} from public key: ${contributorPublicKey}.`
-    });
-    return res.status(502).json({ error: 'Stellar network rejected the transaction', detail: err.message || String(err) });
-  }
-
   const stellarTransactionId = await insertContributionSubmitted(null, {
     txHash,
     campaignId: prepared.campaign_id,
@@ -743,6 +755,8 @@ router.post('/submit-signed', requireAuth, asyncHandler(async (req, res) => {
     signedXdr: signed_xdr,
     metadata: prepared.flow_metadata,
   });
+
+  setImmediate(() => attributeContributionToReferrer(prepared.campaign_id, req).catch(() => {}));
 
   res.status(202).json({
     tx_hash: txHash,
@@ -849,6 +863,7 @@ router.post(
         sendAsset: send_asset,
         displayName: display_name,
       });
+      setImmediate(() => attributeContributionToReferrer(campaign_id, req).catch(() => {}));
       res.status(202).json({
         tx_hash: result.txHash,
         stellar_transaction_id: result.stellarTransactionId,

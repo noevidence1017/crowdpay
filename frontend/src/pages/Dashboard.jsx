@@ -32,7 +32,7 @@ export default function Dashboard() {
   const { user, token, ready, updateUser } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
-  const activeTab = tabParam === 'contributions' ? 'contributions' : 'campaigns';
+  const activeTab = tabParam === 'contributions' ? 'contributions' : tabParam === 'referrals' ? 'referrals' : 'campaigns';
 
   const [stats, setStats] = useState(null);
   const [campaigns, setCampaigns] = useState([]);
@@ -43,8 +43,15 @@ export default function Dashboard() {
   const [balance, setBalance] = useState(null);
   const [balanceLoading, setBalanceLoading] = useState(true);
   const [showDepositModal, setShowDepositModal] = useState(false);
+  const [referralData, setReferralData] = useState({});
+  const [referralLoading, setReferralLoading] = useState(false);
 
   const isCreator = user?.role === 'creator' || user?.role === 'admin';
+
+  const tabs = isCreator
+    ? [...TABS, { id: 'referrals', label: 'Referrals' }]
+    : TABS;
+
   const kycRequired =
     user?.kyc_required_for_campaigns ??
     String(import.meta.env.VITE_KYC_REQUIRED_FOR_CAMPAIGNS ?? 'true').toLowerCase() !== 'false';
@@ -80,9 +87,30 @@ export default function Dashboard() {
       });
   }, [user?.role, updateUser]);
 
+  useEffect(() => {
+    if (!isCreator || activeTab !== 'referrals' || !campaigns.length) return;
+    setReferralLoading(true);
+    Promise.all(
+      campaigns.map((c) =>
+        api.getReferralLeaderboard(c.id).then((rows) => [c.id, rows]).catch(() => [c.id, []]),
+      ),
+    )
+      .then((results) => {
+        const data = {};
+        results.forEach(([id, rows]) => {
+          data[id] = rows;
+        });
+        setReferralData(data);
+      })
+      .catch(() => {})
+      .finally(() => setReferralLoading(false));
+  }, [isCreator, activeTab, campaigns]);
+
   function setTab(tabId) {
     if (tabId === 'contributions') {
       setSearchParams({ tab: 'contributions' });
+    } else if (tabId === 'referrals') {
+      setSearchParams({ tab: 'referrals' });
     } else {
       setSearchParams({});
     }
@@ -148,7 +176,7 @@ export default function Dashboard() {
           paddingBottom: '0.5rem',
         }}
       >
-        {TABS.map((tab) => (
+        {tabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
@@ -401,6 +429,95 @@ export default function Dashboard() {
                     >
                       View transaction
                     </a>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
+
+      {activeTab === 'referrals' && isCreator && (
+        <section role="tabpanel" aria-labelledby="tab-referrals">
+          {referralLoading ? (
+            <p style={{ color: 'var(--color-text-hint)' }}>Loading referral data...</p>
+          ) : campaigns.length === 0 ? (
+            <p className="alert alert--info">
+              No campaigns yet.{' '}
+              <Link to="/campaigns/new" style={{ color: 'var(--color-accent)', fontWeight: 600 }}>
+                Create a campaign
+              </Link>{' '}
+              to start tracking referrals.
+            </p>
+          ) : (
+            <div style={{ display: 'grid', gap: '0.75rem' }}>
+              {campaigns.map((campaign) => {
+                const refs = referralData[campaign.id] || [];
+                const totalClicks = refs.reduce((s, r) => s + r.click_count, 0);
+                const totalContributions = refs.reduce((s, r) => s + r.contribution_count, 0);
+                return (
+                  <div key={campaign.id} className="campaign-card">
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        gap: '0.5rem',
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                        marginBottom: '0.75rem',
+                      }}
+                    >
+                      <Link
+                        to={`/campaigns/${campaign.id}`}
+                        style={{ color: 'var(--color-accent)', fontWeight: 700 }}
+                      >
+                        {campaign.title}
+                      </Link>
+                      <CampaignStatusBadge status={campaign.status} />
+                    </div>
+                    {refs.length === 0 ? (
+                      <p style={{ color: 'var(--color-text-hint)', fontSize: '0.85rem' }}>
+                        No referral activity yet.
+                      </p>
+                    ) : (
+                      <>
+                        <div
+                          style={{
+                            display: 'flex',
+                            gap: '1rem',
+                            marginBottom: '0.75rem',
+                            fontSize: '0.85rem',
+                          }}
+                        >
+                          <span><strong>{totalClicks}</strong> total clicks</span>
+                          <span><strong>{totalContributions}</strong> total conversions</span>
+                        </div>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                          <thead>
+                            <tr style={{ borderBottom: '2px solid var(--color-border)', textAlign: 'left' }}>
+                              <th style={{ padding: '0.35rem 0.5rem' }}>Referrer</th>
+                              <th style={{ padding: '0.35rem 0.5rem', textAlign: 'center' }}>Clicks</th>
+                              <th style={{ padding: '0.35rem 0.5rem', textAlign: 'center' }}>Conversions</th>
+                              <th style={{ padding: '0.35rem 0.5rem', textAlign: 'center' }}>Rate</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {refs.map((r, i) => (
+                              <tr key={r.referral_code} style={{ borderBottom: '1px solid var(--color-border-lighter)' }}>
+                                <td style={{ padding: '0.35rem 0.5rem', fontWeight: 600 }}>{r.referrer_name}</td>
+                                <td style={{ padding: '0.35rem 0.5rem', textAlign: 'center' }}>{r.click_count}</td>
+                                <td style={{ padding: '0.35rem 0.5rem', textAlign: 'center' }}>{r.contribution_count}</td>
+                                <td style={{ padding: '0.35rem 0.5rem', textAlign: 'center' }}>
+                                  {r.click_count > 0
+                                    ? `${((r.contribution_count / r.click_count) * 100).toFixed(0)}%`
+                                    : '-'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </>
+                    )}
                   </div>
                 );
               })}

@@ -32,6 +32,10 @@ function stripHtml(value = '') {
   return String(value).replace(/<[^>]*>/g, '').trim();
 }
 
+function generateReferralCode() {
+  return crypto.randomBytes(6).toString('base64url').slice(0, 8);
+}
+
 /**
  * @openapi
  * tags:
@@ -366,6 +370,30 @@ router.get('/:id', asyncHandler(async (req, res) => {
    *       404:
    *         description: Not found
    */
+  const refCode = req.query.ref;
+  if (refCode) {
+    try {
+      const { rows: referralRows } = await db.query(
+        'SELECT id, campaign_id FROM campaign_referrals WHERE referral_code = $1 AND campaign_id = $2',
+        [refCode, req.params.id]
+      );
+      if (referralRows.length) {
+        await db.query(
+          'UPDATE campaign_referrals SET click_count = click_count + 1 WHERE id = $1',
+          [referralRows[0].id]
+        );
+        res.cookie(`cp_ref_${req.params.id}`, refCode, {
+          httpOnly: true,
+          sameSite: 'lax',
+          maxAge: 30 * 24 * 60 * 60 * 1000,
+          path: '/',
+        });
+      }
+    } catch (err) {
+      logger.warn('Referral click tracking failed', { campaign_id: req.params.id, ref: refCode, error: err.message });
+    }
+  }
+
   const query = `
     SELECT *,
            (SELECT COUNT(DISTINCT sender_public_key)::int FROM contributions WHERE campaign_id = $1) AS contributor_count
@@ -1123,6 +1151,55 @@ router.get('/:id/analytics', asyncHandler(async (req, res) => {
   `, [req.params.id]);
 
   res.json({ dailyTotals, assetBreakdown, topContributors });
+}));
+
+// GET /campaigns/:id/referral — get or create a referral code for the authenticated user
+router.get('/:id/referral', requireAuth, asyncHandler(async (req, res) => {
+  const { rows: existing } = await db.query(
+    `SELECT cr.id, cr.referral_code, cr.click_count, cr.contribution_count
+     FROM campaign_referrals cr
+     WHERE cr.campaign_id = $1 AND cr.referrer_user_id = $2`,
+    [req.params.id, req.user.userId]
+  );
+
+  if (existing.length) {
+    const row = existing[0];
+    return res.json({
+      referral_code: row.referral_code,
+      referral_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/campaigns/${req.params.id}?ref=${row.referral_code}`,
+      click_count: row.click_count,
+      contribution_count: row.contribution_count,
+    });
+  }
+
+  const code = generateReferralCode();
+  const { rows: inserted } = await db.query(
+    `INSERT INTO campaign_referrals (campaign_id, referrer_user_id, referral_code)
+     VALUES ($1, $2, $3)
+     RETURNING referral_code, click_count, contribution_count`,
+    [req.params.id, req.user.userId, code]
+  );
+  const row = inserted[0];
+  res.status(201).json({
+    referral_code: row.referral_code,
+    referral_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/campaigns/${req.params.id}?ref=${row.referral_code}`,
+    click_count: row.click_count,
+    contribution_count: row.contribution_count,
+  });
+}));
+
+// GET /campaigns/:id/referrals — creator only; list top referrers
+router.get('/:id/referrals', requireAuth, requireCampaignMember('owner'), asyncHandler(async (req, res) => {
+  const { rows } = await db.query(
+    `SELECT cr.referral_code, cr.click_count, cr.contribution_count, cr.created_at,
+            u.name AS referrer_name, u.id AS referrer_id
+     FROM campaign_referrals cr
+     JOIN users u ON u.id = cr.referrer_user_id
+     WHERE cr.campaign_id = $1
+     ORDER BY cr.contribution_count DESC, cr.click_count DESC`,
+    [req.params.id]
+  );
+  res.json(rows);
 }));
 
 module.exports = router;
