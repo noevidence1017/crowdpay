@@ -47,6 +47,10 @@ function stripHtml(value = '') {
   return String(value).replace(/<[^>]*>/g, '').trim();
 }
 
+function generateReferralCode() {
+  return crypto.randomBytes(6).toString('base64url').slice(0, 8);
+}
+
 /**
  * @openapi
  * tags:
@@ -199,7 +203,7 @@ router.get('/', getCampaignsValidation, validateRequest, asyncHandler(async (req
    *                   items:
    *                     type: object
    */
-  const { search, status, asset, sort = 'newest' } = req.query;
+  const { search, status, asset, category, sort = 'newest' } = req.query;
   const limit = Math.min(Number(req.query.limit || 20), 100);
   const offset = Math.max(Number(req.query.offset || 0), 0);
   const filters = [];
@@ -218,12 +222,13 @@ router.get('/', getCampaignsValidation, validateRequest, asyncHandler(async (req
     params.push(asset);
     filters.push(`c.asset_type = $${params.length}`);
   }
+  if (category) {
+    params.push(category);
+    filters.push(`c.category = $${params.length}`);
+  }
   if (search) {
-    const escaped = String(search).replace(/[%_\\]/g, '\\$&');
-    params.push(`%${escaped}%`);
-    filters.push(
-      `(c.title ILIKE $${params.length} OR COALESCE(c.description, '') ILIKE $${params.length})`
-    );
+    params.push(search);
+    filters.push(`c.search_vector @@ websearch_to_tsquery('english', $${params.length})`);
   }
 
   const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
@@ -233,6 +238,7 @@ router.get('/', getCampaignsValidation, validateRequest, asyncHandler(async (req
 
   const sortExpressions = {
     newest: 'c.created_at DESC',
+    trending: `(SELECT COUNT(*) FROM contributions ctr WHERE ctr.campaign_id = c.id AND ctr.created_at >= NOW() - INTERVAL '48 hours') DESC`,
     ending_soon: 'c.deadline ASC NULLS LAST',
     most_funded: 'c.raised_amount DESC',
     most_backed: '(SELECT COUNT(*) FROM contributions ctr WHERE ctr.campaign_id = c.id) DESC',
@@ -381,6 +387,30 @@ router.get('/:id', asyncHandler(async (req, res) => {
    *       404:
    *         description: Not found
    */
+  const refCode = req.query.ref;
+  if (refCode) {
+    try {
+      const { rows: referralRows } = await db.query(
+        'SELECT id, campaign_id FROM campaign_referrals WHERE referral_code = $1 AND campaign_id = $2',
+        [refCode, req.params.id]
+      );
+      if (referralRows.length) {
+        await db.query(
+          'UPDATE campaign_referrals SET click_count = click_count + 1 WHERE id = $1',
+          [referralRows[0].id]
+        );
+        res.cookie(`cp_ref_${req.params.id}`, refCode, {
+          httpOnly: true,
+          sameSite: 'lax',
+          maxAge: 30 * 24 * 60 * 60 * 1000,
+          path: '/',
+        });
+      }
+    } catch (err) {
+      logger.warn('Referral click tracking failed', { campaign_id: req.params.id, ref: refCode, error: err.message });
+    }
+  }
+
   const query = `
     SELECT *,
            (SELECT COUNT(DISTINCT sender_public_key)::int FROM contributions WHERE campaign_id = $1) AS contributor_count
@@ -1097,49 +1127,74 @@ router.post('/:id/members/accept', requireAuth, asyncHandler(async (req, res) =>
   res.json(member);
 }));
 
-// GET /campaigns/:id/analytics — campaign analytics (owner/manager/viewer)
-router.get('/:id/analytics', requireAuth, asyncHandler(async (req, res) => {
-  const role = await resolveUserCampaignRole(
-    req.params.id,
-    req.user.userId,
-    req.user.role === 'admin'
-  );
-  if (!canViewAnalytics(role)) {
-    return res.status(403).json({ error: 'Insufficient permissions to view analytics' });
+const { getCampaignAnalytics, getCampaignContributors } = require('../services/analyticsService');
+
+// GET /campaigns/:id/analytics — full contribution analytics
+router.get('/:id/analytics', asyncHandler(async (req, res) => {
+  const data = await getCampaignAnalytics(req.params.id);
+  if (!data) return res.status(404).json({ error: 'Campaign not found' });
+  res.json(data);
+}));
+
+// GET /campaigns/:id/analytics/contributors — country breakdown, repeat vs first-time
+router.get('/:id/analytics/contributors', requireAuth, asyncHandler(async (req, res) => {
+  // verify campaign exists and requester is owner or admin
+  const { rows } = await db.query('SELECT creator_id FROM campaigns WHERE id = $1', [req.params.id]);
+  if (!rows.length) return res.status(404).json({ error: 'Campaign not found' });
+  if (req.user.role !== 'admin' && rows[0].creator_id !== req.user.userId) {
+    return res.status(403).json({ error: 'Forbidden' });
   }
-  const { rows: dailyTotals } = await db.query(`
-    SELECT
-      DATE(created_at) AS day,
-      COUNT(*)          AS contribution_count,
-      SUM(amount)       AS total_amount,
-      asset
-    FROM contributions
-    WHERE campaign_id = $1
-      AND created_at >= NOW() - INTERVAL '30 days'
-    GROUP BY DATE(created_at), asset
-    ORDER BY day ASC
-  `, [req.params.id]);
+  const data = await getCampaignContributors(req.params.id);
+  res.json(data);
+}));
 
-  const { rows: assetBreakdown } = await db.query(`
-    SELECT
-      COALESCE(source_asset, asset) AS paid_with,
-      COUNT(*)      AS count,
-      SUM(COALESCE(source_amount, amount)) AS total_sent
-    FROM contributions
-    WHERE campaign_id = $1
-    GROUP BY paid_with
-  `, [req.params.id]);
+// GET /campaigns/:id/referral — get or create a referral code for the authenticated user
+router.get('/:id/referral', requireAuth, asyncHandler(async (req, res) => {
+  const { rows: existing } = await db.query(
+    `SELECT cr.id, cr.referral_code, cr.click_count, cr.contribution_count
+     FROM campaign_referrals cr
+     WHERE cr.campaign_id = $1 AND cr.referrer_user_id = $2`,
+    [req.params.id, req.user.userId]
+  );
 
-  const { rows: topContributors } = await db.query(`
-    SELECT sender_public_key, SUM(amount) AS total, COUNT(*) AS times
-    FROM contributions
-    WHERE campaign_id = $1
-    GROUP BY sender_public_key
-    ORDER BY total DESC
-    LIMIT 5
-  `, [req.params.id]);
+  if (existing.length) {
+    const row = existing[0];
+    return res.json({
+      referral_code: row.referral_code,
+      referral_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/campaigns/${req.params.id}?ref=${row.referral_code}`,
+      click_count: row.click_count,
+      contribution_count: row.contribution_count,
+    });
+  }
 
-  res.json({ dailyTotals, assetBreakdown, topContributors });
+  const code = generateReferralCode();
+  const { rows: inserted } = await db.query(
+    `INSERT INTO campaign_referrals (campaign_id, referrer_user_id, referral_code)
+     VALUES ($1, $2, $3)
+     RETURNING referral_code, click_count, contribution_count`,
+    [req.params.id, req.user.userId, code]
+  );
+  const row = inserted[0];
+  res.status(201).json({
+    referral_code: row.referral_code,
+    referral_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/campaigns/${req.params.id}?ref=${row.referral_code}`,
+    click_count: row.click_count,
+    contribution_count: row.contribution_count,
+  });
+}));
+
+// GET /campaigns/:id/referrals — creator only; list top referrers
+router.get('/:id/referrals', requireAuth, requireCampaignMember('owner'), asyncHandler(async (req, res) => {
+  const { rows } = await db.query(
+    `SELECT cr.referral_code, cr.click_count, cr.contribution_count, cr.created_at,
+            u.name AS referrer_name, u.id AS referrer_id
+     FROM campaign_referrals cr
+     JOIN users u ON u.id = cr.referrer_user_id
+     WHERE cr.campaign_id = $1
+     ORDER BY cr.contribution_count DESC, cr.click_count DESC`,
+    [req.params.id]
+  );
+  res.json(rows);
 }));
 
 module.exports = router;
