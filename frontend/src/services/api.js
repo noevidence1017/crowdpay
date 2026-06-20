@@ -213,7 +213,7 @@ export const api = {
   getFeaturedCampaigns: () => request("GET", "/campaigns/featured"),
   getCampaigns: (options = {}) =>
     request("GET", "/campaigns", null, { query: options }),
-  getCampaign: (id) => request("GET", `/campaigns/${id}`),
+  getCampaign: (id, options = {}) => request("GET", `/campaigns/${id}`, null, { query: options }),
   getCampaignAnalytics: (id) => request("GET", `/campaigns/${id}/analytics`),
   getCampaignAnalyticsContributors: (id) => request("GET", `/campaigns/${id}/analytics/contributors`),
   getUserDashboardAnalytics: () => request("GET", "/users/me/dashboard/analytics"),
@@ -334,4 +334,7 @@ export const api = {
   getNotifications: () => request('GET', '/notifications'),
   markNotificationRead: (id) => request('PATCH', `/notifications/${id}/read`, {}),
   markAllNotificationsRead: () => request('PATCH', '/notifications/read-all', {}),
+
+  getReferralCode: (campaignId) => request('GET', `/campaigns/${campaignId}/referral`),
+  getReferralLeaderboard: (campaignId) => request('GET', `/campaigns/${campaignId}/referrals`),
 };

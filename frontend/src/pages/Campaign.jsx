@@ -181,6 +181,24 @@ export default function Campaign() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const [hasPendingWithdrawal, setHasPendingWithdrawal] = useState(false);
+  const [referralCode, setReferralCode] = useState(null);
+  const [referralUrl, setReferralUrl] = useState(null);
+  const [referralLeaderboard, setReferralLeaderboard] = useState(null);
+
+  const refParam = new URLSearchParams(location.search).get('ref');
+
+  useEffect(() => {
+    if (!user || !id) return;
+    api.getReferralCode(id).then((data) => {
+      setReferralCode(data.referral_code);
+      setReferralUrl(data.referral_url);
+    }).catch(() => {});
+  }, [user, id]);
+
+  useEffect(() => {
+    if (!isOwner || !id) return;
+    api.getReferralLeaderboard(id).then(setReferralLeaderboard).catch(() => {});
+  }, [isOwner, id]);
 
   useEffect(() => {
     document.body.dataset.printUrl = window.location.href;
@@ -193,8 +211,9 @@ export default function Campaign() {
 
   useEffect(() => {
     setLoadError("");
+    const campaignOpts = refParam ? { ref: refParam } : {};
     api
-      .getCampaign(id, token)
+      .getCampaign(id, campaignOpts)
       .then((data) => {
         setCampaign(data);
         if (data.user_role === "owner") {
@@ -266,7 +285,7 @@ export default function Campaign() {
       if (document.visibilityState !== "visible") return;
       try {
         const [nextCampaign, nextContributionsData] = await Promise.all([
-          api.getCampaign(id, token),
+          api.getCampaign(id),
           api.getContributions(id, { limit: showAll ? 100 : 10, offset: 0 }),
         ]);
         if (aborted) return;
@@ -999,10 +1018,9 @@ export default function Campaign() {
                 await navigator.share({
                   title: campaign.title,
                   text: campaign.description,
-                  url: window.location.href,
+                  url: referralUrl || window.location.href,
                 });
               } catch (err) {
-                // User cancelled share or error occurred
                 if (err.name !== "AbortError") {
                   console.error("Share failed:", err);
                 }
@@ -1024,8 +1042,9 @@ export default function Campaign() {
             gap: "0.5rem",
           }}
           onClick={() => {
+            const shareUrl = referralUrl || window.location.href;
             const text = encodeURIComponent(
-              `I just backed ${campaign.title} on CrowdPay — ${pct}% funded with ${campaign.contributor_count || 0} backers. Join me: ${window.location.href}`,
+              `I just backed ${campaign.title} on CrowdPay — ${pct}% funded with ${campaign.contributor_count || 0} backers. Join me: ${shareUrl}`,
             );
             window.open(
               `https://twitter.com/intent/tweet?text=${text}`,
@@ -1047,8 +1066,9 @@ export default function Campaign() {
             gap: "0.5rem",
           }}
           onClick={() => {
+            const shareUrl = referralUrl || window.location.href;
             const text = encodeURIComponent(
-              `I just backed ${campaign.title} on CrowdPay — ${pct}% funded with ${campaign.contributor_count || 0} backers. Join me: ${window.location.href}`,
+              `I just backed ${campaign.title} on CrowdPay — ${pct}% funded with ${campaign.contributor_count || 0} backers. Join me: ${shareUrl}`,
             );
             window.open(`https://wa.me/?text=${text}`, "_blank");
           }}
@@ -1072,7 +1092,7 @@ export default function Campaign() {
               transition: "all 0.2s ease",
             }}
             onClick={() => {
-              navigator.clipboard.writeText(window.location.href);
+              navigator.clipboard.writeText(referralUrl || window.location.href);
               setLinkCopied(true);
               setTimeout(() => setLinkCopied(false), 2000);
             }}
@@ -1137,12 +1157,9 @@ export default function Campaign() {
         <button type="button" className="btn-secondary" data-no-print onClick={() => setShowQR((v) => !v)}>
           {showQR ? 'Hide QR code' : 'Show QR code'}
         </button>
-        <div className="qr-wrapper" style={{ marginTop: '1rem', display: showQR ? 'flex' : 'none', justifyContent: 'center' }}>
-          <CampaignQRCode url={`${window.location.origin}/campaigns/${id}`} size={200} />
-        </div>
         {showQR && (
           <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'center' }}>
-            <CampaignQRCode url={campaignUrl} size={200} />
+            <CampaignQRCode url={referralUrl || `${window.location.origin}/campaigns/${id}`} size={200} />
           </div>
         )}
       </div>
@@ -1715,6 +1732,40 @@ export default function Campaign() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {isOwner && referralLeaderboard && referralLeaderboard.length > 0 && (
+        <div style={{ marginBottom: "2rem" }}>
+          <h2 style={styles.sectionTitle}>Referral Leaderboard</h2>
+          <div className="campaign-card">
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
+              <thead>
+                <tr style={{ borderBottom: "2px solid var(--color-border)", textAlign: "left" }}>
+                  <th style={{ padding: "0.5rem 0.75rem" }}>#</th>
+                  <th style={{ padding: "0.5rem 0.75rem" }}>Referrer</th>
+                  <th style={{ padding: "0.5rem 0.75rem", textAlign: "center" }}>Clicks</th>
+                  <th style={{ padding: "0.5rem 0.75rem", textAlign: "center" }}>Contributions</th>
+                  <th style={{ padding: "0.5rem 0.75rem", textAlign: "center" }}>Conv. Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {referralLeaderboard.map((r, i) => (
+                  <tr key={r.referral_code} style={{ borderBottom: "1px solid var(--color-border-lighter)" }}>
+                    <td style={{ padding: "0.5rem 0.75rem", color: "var(--color-text-hint)" }}>{i + 1}</td>
+                    <td style={{ padding: "0.5rem 0.75rem", fontWeight: 600 }}>{r.referrer_name}</td>
+                    <td style={{ padding: "0.5rem 0.75rem", textAlign: "center" }}>{r.click_count}</td>
+                    <td style={{ padding: "0.5rem 0.75rem", textAlign: "center" }}>{r.contribution_count}</td>
+                    <td style={{ padding: "0.5rem 0.75rem", textAlign: "center" }}>
+                      {r.click_count > 0
+                        ? `${((r.contribution_count / r.click_count) * 100).toFixed(0)}%`
+                        : '-'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
