@@ -69,8 +69,18 @@ function encodeMilestone(m) {
   });
 }
 
+async function refund(contractId, contributorPublicKey) {
+  return invokeContract({
+    contractId,
+    method: 'refund',
+    args: [nativeToScVal(Address.fromString(contributorPublicKey))],
+    signerSecret: process.env.PLATFORM_SECRET_KEY,
+  });
+}
+
 module.exports = {
   invokeContract,
   encodeMilestone,
   nativeToScVal,
+  refund,
 };

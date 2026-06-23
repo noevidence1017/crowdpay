@@ -386,6 +386,7 @@ async function handlePayment(campaignId, walletPublicKey, payment) {
       }
     });
   }
+}
 
   function scheduleStreamReconnect(campaignId, walletPublicKey, attempt) {
     const delay = Math.min(
@@ -644,4 +645,3 @@ async function handlePayment(campaignId, walletPublicKey, payment) {
     addSSEClient,
     removeSSEClient,
   };
-}
