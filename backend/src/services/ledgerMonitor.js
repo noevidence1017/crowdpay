@@ -11,6 +11,7 @@ const db = require("../config/database");
 const logger = require("../config/logger");
 const { getCampaignBalance } = require("./stellarService");
 const { markContributionIndexed } = require("./stellarTransactionService");
+const { assignTierToContribution } = require("./rewardTierService");
 const { sendContributionReceipt } = require("./emailService");
 const {
   emitWebhookEventForUser,
@@ -275,6 +276,14 @@ async function handlePayment(campaignId, walletPublicKey, payment) {
       [destinationAmount, campaignId],
     );
 
+    // Match this contribution to the highest reward tier it qualifies for that
+    // still has capacity (idempotent + atomic with the insert above).
+    const assignedTier = await assignTierToContribution(client, {
+      campaignId,
+      amount: destinationAmount,
+      contributionId: inserted[0].id,
+    });
+
     await markContributionIndexed(client, txHash, inserted[0].id);
 
     if (anchorMetadata?.anchor_deposit_id) {
@@ -309,6 +318,7 @@ async function handlePayment(campaignId, walletPublicKey, payment) {
         asset: destinationAsset,
         payment_type: paymentType,
         anchor_transaction_id: anchorMetadata?.anchor_transaction_id || null,
+        reward_tier: assignedTier || null,
       },
       receiptPayload: {
         campaignId,
