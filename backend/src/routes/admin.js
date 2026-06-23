@@ -509,7 +509,7 @@ router.patch('/users/:id/demote', async (req, res) => {
 // Migrate old /milestones endpoint if needed
 router.get('/milestones', async (req, res) => {
   const status = req.query.status ? String(req.query.status) : null;
-  const allowedStatuses = ['pending', 'approved', 'released'];
+  const allowedStatuses = ['pending', 'pending_review', 'rejected', 'approved', 'released'];
   if (status && !allowedStatuses.includes(status)) {
     return res.status(400).json({ error: `status must be one of: ${allowedStatuses.join(', ')}` });
   }

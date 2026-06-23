@@ -274,6 +274,12 @@ export const api = {
   setCampaignMilestones: (campaignId, milestones) =>
     request('POST', `/campaigns/${campaignId}/milestones`, { milestones }),
   submitMilestoneEvidence: (id, body) => request('POST', `/milestones/${id}/submit`, body),
+  uploadMilestoneEvidence: (id, file) => {
+    const formData = new FormData();
+    formData.append('evidence_file', file);
+    return uploadFormData(`/milestones/${encodeURIComponent(id)}/upload-evidence`, formData);
+  },
+  getMilestoneEvents: (id) => request('GET', `/milestones/${id}/events`),
   approveMilestone: (id, body) => request('POST', `/milestones/${id}/release`, body || {}),
   rejectMilestone: (id, body) => request('POST', `/milestones/${id}/reject`, body || {}),
   contribute: (body) => request('POST', '/contributions', body),
