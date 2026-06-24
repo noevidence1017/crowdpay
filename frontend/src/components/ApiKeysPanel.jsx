@@ -45,7 +45,7 @@ export default function ApiKeysPanel() {
   }
 
   async function revokeKey(id) {
-    if (!confirm('Revoke this API key? Integrations using it will stop working immediately.')) return;
+    if (!window.confirm('Revoke this API key? Integrations using it will stop working immediately.')) return;
     setError('');
     try {
       await api.deleteApiKey(id);

@@ -14,7 +14,7 @@ const { watchCampaignWallet, addSSEClient, removeSSEClient } = require('../servi
 const { emitWebhookEventForUser, WEBHOOK_EVENTS } = require('../services/webhookDispatcher');
 const { refreshCampaignStatus, refreshActiveCampaignStatuses } = require('../services/campaignStatusService');
 const { queueFailedCampaignRefunds } = require('../services/campaignStatusActions');
-const { invokeContract, encodeMilestone, nativeToScVal } = require('../services/sorobanService');
+const { invokeContract, encodeMilestone, nativeToScVal, deployCampaignContracts } = require('../services/sorobanService');
 const { sendEmail, sendTeamMemberInvitedEmail } = require('../services/emailService');
 const { uploadCampaignCoverImage } = require('../services/storage');
 const { isKycRequiredForCampaigns } = require('../services/kycProvider');
@@ -127,7 +127,7 @@ const MILESTONE_PERCENT_SCALE = 10000;
 const MILESTONE_LIMIT = 5;
 
 function normalizeMilestonesInput(input) {
-  if (input == null) return [];
+  if (input === null || input === undefined) return [];
   if (!Array.isArray(input)) {
     throw new Error('milestones must be an array');
   }

@@ -1,49 +1,50 @@
-import React, { useEffect, useState, useRef } from "react";
-import { Link, useParams, useLocation, useNavigate } from "react-router-dom";
-import { api } from "../services/api";
-import { useAuth } from "../context/AuthContext";
-import ContributeModal from "../components/ContributeModal";
-import RelativeTime from "../components/RelativeTime";
-import DisputeModal from "../components/DisputeModal";
-import TransactionHistory from "../components/TransactionHistory";
-import MilestoneTracker from "../components/MilestoneTracker";
-import WithdrawalsSection from "../components/WithdrawalsSection";
-import CampaignDetailSkeleton from "../components/skeletons/CampaignDetailSkeleton";
-import ContributionListSkeleton from "../components/skeletons/ContributionListSkeleton";
-import VerificationBadge from "../components/VerificationBadge";
-import CampaignStatusBadge from "../components/CampaignStatusBadge";
-import { stellarExpertTxUrl } from "../config/stellar";
-import CampaignQRCode from "../components/CampaignQRCode";
+import { useEffect, useState, useRef } from 'react';
+import { Link, useParams, useLocation, useNavigate } from 'react-router-dom';
+import { api } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import ContributeModal from '../components/ContributeModal';
+import RelativeTime from '../components/RelativeTime';
+import DisputeModal from '../components/DisputeModal';
+import TransactionHistory from '../components/TransactionHistory';
+import MilestoneTracker from '../components/MilestoneTracker';
+import WithdrawalsSection from '../components/WithdrawalsSection';
+import CampaignDetailSkeleton from '../components/skeletons/CampaignDetailSkeleton';
+import ContributionListSkeleton from '../components/skeletons/ContributionListSkeleton';
+import VerificationBadge from '../components/VerificationBadge';
+import CampaignStatusBadge from '../components/CampaignStatusBadge';
+import { stellarExpertTxUrl } from '../config/stellar';
+import CampaignQRCode from '../components/CampaignQRCode';
 import { getNetwork, signTransaction } from '@stellar/freighter-api';
-import { isConnected, getPublicKey } from "@stellar/freighter-api";
+import { isConnected, getPublicKey } from '@stellar/freighter-api';
 
 function escapeHtml(text) {
   return text
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
 
 function markdownToHtml(markdown) {
-  const escaped = escapeHtml(markdown || "");
+  const escaped = escapeHtml(markdown || '');
   return escaped
-    .replace(/^### (.*)$/gm, "<h3>$1</h3>")
-    .replace(/^## (.*)$/gm, "<h2>$1</h2>")
-    .replace(/^# (.*)$/gm, "<h1>$1</h1>")
-    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.*?)\*/g, "<em>$1</em>")
+    .replace(/^### (.*)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.*)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.*)$/gm, '<h1>$1</h1>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
     .replace(
       /\[(.*?)\]\((https?:\/\/[^\s)]+)\)/g,
-      '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>',
+      '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
     )
-    .replace(/\n/g, "<br />");
+    .replace(/\n/g, '<br />');
 }
 
 function progressColor(pct, status) {
   if (status === 'funded' || pct >= 100) return '#10b981'; // green — goal reached
-  if (status === 'closed' || status === 'withdrawn' || status === 'refunded' || status === 'failed') return '#6b7280'; // grey — ended
+  if (status === 'closed' || status === 'withdrawn' || status === 'refunded' || status === 'failed')
+    return '#6b7280'; // grey — ended
   if (pct >= 75) return '#3b82f6'; // blue — nearly there
   return '#7c3aed'; // default purple
 }
@@ -62,43 +63,41 @@ function ContributionRow({ c }) {
       <div
         style={{
           minWidth: 0,
-          display: "flex",
-          alignItems: "center",
-          gap: "0.75rem",
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem',
         }}
       >
-        <div style={styles.avatar}>
-          {(c.display_name || "A")[0].toUpperCase()}
-        </div>
+        <div style={styles.avatar}>{(c.display_name || 'A')[0].toUpperCase()}</div>
         <div style={{ minWidth: 0 }}>
-          <div style={styles.sender}>{c.display_name || "Anonymous"}</div>
+          <div style={styles.sender}>{c.display_name || 'Anonymous'}</div>
           <div style={styles.convHint}>
             <button
               type="button"
               onClick={handleCopy}
               title="Copy full public key"
               style={{
-                background: "none",
-                border: "none",
-                color: "inherit",
-                fontFamily: "monospace",
-                fontSize: "inherit",
-                cursor: "pointer",
+                background: 'none',
+                border: 'none',
+                color: 'inherit',
+                fontFamily: 'monospace',
+                fontSize: 'inherit',
+                cursor: 'pointer',
                 padding: 0,
               }}
             >
               {c.sender_public_key.slice(0, 4)}…{c.sender_public_key.slice(-4)}
             </button>
-            {" • "}
+            {' • '}
             <RelativeTime date={c.created_at} />
           </div>
           {c.refund_status && (
             <div style={styles.refundTag}>
-              {c.refund_status === "pending" && "Refund pending"}
-              {c.refund_status === "submitted" && "Refunded"}
-              {c.refund_status === "indexed" && "Refunded"}
-              {c.refund_status === "failed" && "Refund failed"}
-              {c.refund_status === "denied" && "Refund denied"}
+              {c.refund_status === 'pending' && 'Refund pending'}
+              {c.refund_status === 'submitted' && 'Refunded'}
+              {c.refund_status === 'indexed' && 'Refunded'}
+              {c.refund_status === 'failed' && 'Refund failed'}
+              {c.refund_status === 'denied' && 'Refund denied'}
             </div>
           )}
           {c.tx_hash && (
@@ -106,14 +105,14 @@ function ContributionRow({ c }) {
               href={stellarExpertTxUrl(c.tx_hash)}
               target="_blank"
               rel="noopener noreferrer"
-              style={{ fontSize: "0.75rem", color: "#7c3aed", fontWeight: 600 }}
+              style={{ fontSize: '0.75rem', color: '#7c3aed', fontWeight: 600 }}
             >
               View on chain ↗
             </a>
           )}
         </div>
       </div>
-      {c.amount != null && (
+      {c.amount !== null && (
         <span style={styles.amount}>
           {Number(c.amount).toLocaleString()} {c.asset}
         </span>
@@ -130,7 +129,7 @@ export default function Campaign() {
   const { user, token } = useAuth();
 
   const [campaign, setCampaign] = useState(null);
-  const [loadError, setLoadError] = useState("");
+  const [loadError, setLoadError] = useState('');
   const [contributions, setContributions] = useState(null);
   const [totalContributions, setTotalContributions] = useState(0);
   const [showAll, setShowAll] = useState(false);
@@ -140,47 +139,44 @@ export default function Campaign() {
   const [contributed, setContributed] = useState(false);
 
   const [freighterGuestMode, setFreighterGuestMode] = useState(false);
-  const [showCreatedBanner, setShowCreatedBanner] = useState(
-    !!location.state?.created,
-  );
-  const [coverUploadError, setCoverUploadError] = useState(
-    location.state?.coverUploadError || "",
-  );
+  const [showCreatedBanner, setShowCreatedBanner] = useState(!!location.state?.created);
+  const [coverUploadError, setCoverUploadError] = useState(location.state?.coverUploadError || '');
   const [updates, setUpdates] = useState([]);
   const [milestones, setMilestones] = useState([]);
   const [tiers, setTiers] = useState([]);
-  const [updateForm, setUpdateForm] = useState({ title: "", body: "" });
+  const [updateForm, setUpdateForm] = useState({ title: '', body: '' });
   const [updateBusy, setUpdateBusy] = useState(false);
-  const [updatesError, setUpdatesError] = useState("");
+  const [updatesError, setUpdatesError] = useState('');
   const [isLive, setIsLive] = useState(false);
   const [members, setMembers] = useState([]);
-  const [inviteForm, setInviteForm] = useState({ email: "", role: "viewer" });
+  const [inviteForm, setInviteForm] = useState({ email: '', role: 'viewer' });
   const [inviteBusy, setInviteBusy] = useState(false);
-  const [inviteError, setInviteError] = useState("");
+  const [inviteError, setInviteError] = useState('');
   const [inviteSuccess, setInviteSuccess] = useState(false);
   const [showQR, setShowQR] = useState(false);
   const [embedCopied, setEmbedCopied] = useState(false);
   const [badgeCopied, setBadgeCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [showEmbedSection, setShowEmbedSection] = useState(false);
   const [isEditingCampaign, setIsEditingCampaign] = useState(false);
   const [editFormData, setEditFormData] = useState({
-    title: "",
-    description: "",
-    deadline: "",
+    title: '',
+    description: '',
+    deadline: '',
   });
-  const [editError, setEditError] = useState("");
-  const [editSuccess, setEditSuccess] = useState("");
+  const [editError, setEditError] = useState('');
+  const [editSuccess, setEditSuccess] = useState('');
   const [editLoading, setEditLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState("contributions");
+  const [activeTab, setActiveTab] = useState('contributions');
   const [editingUpdateId, setEditingUpdateId] = useState(null);
   const [analytics, setAnalytics] = useState(null);
   const [refundBusy, setRefundBusy] = useState(false);
-  const [refundError, setRefundError] = useState("");
-  const [refundSuccess, setRefundSuccess] = useState("");
+  const [refundError, setRefundError] = useState('');
+  const [refundSuccess, setRefundSuccess] = useState('');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
-  const [deleteError, setDeleteError] = useState("");
+  const [deleteError, setDeleteError] = useState('');
   const [hasPendingWithdrawal, setHasPendingWithdrawal] = useState(false);
   const [referralCode, setReferralCode] = useState(null);
   const [referralUrl, setReferralUrl] = useState(null);
@@ -190,11 +186,22 @@ export default function Campaign() {
 
   useEffect(() => {
     if (!user || !id) return;
-    api.getReferralCode(id).then((data) => {
-      setReferralCode(data.referral_code);
-      setReferralUrl(data.referral_url);
-    }).catch(() => {});
+    api
+      .getReferralCode(id)
+      .then((data) => {
+        setReferralCode(data.referral_code);
+        setReferralUrl(data.referral_url);
+      })
+      .catch(() => {});
   }, [user, id]);
+
+  useEffect(() => {
+    if (!isOwner || !id) return;
+    api
+      .getReferralLeaderboard(id)
+      .then(setReferralLeaderboard)
+      .catch(() => {});
+  }, [isOwner, id]);
 
   useEffect(() => {
     document.body.dataset.printUrl = window.location.href;
@@ -206,15 +213,15 @@ export default function Campaign() {
   }, []);
 
   useEffect(() => {
-    setLoadError("");
+    setLoadError('');
     const campaignOpts = refParam ? { ref: refParam } : {};
     api
       .getCampaign(id, campaignOpts)
       .then((data) => {
         setCampaign(data);
         const role = data.user_role;
-        if (role === "owner" || role === "manager") {
-          setActiveTab("team");
+        if (role === 'owner' || role === 'manager') {
+          setActiveTab('team');
           api
             .getCampaignMembers(id)
             .then(setMembers)
@@ -222,7 +229,7 @@ export default function Campaign() {
         } else {
           setMembers([]);
         }
-        if (role === "owner" || role === "manager" || role === "viewer") {
+        if (role === 'owner' || role === 'manager' || role === 'viewer') {
           api
             .getCampaignAnalytics(id)
             .then(setAnalytics)
@@ -231,7 +238,7 @@ export default function Campaign() {
           setAnalytics(null);
         }
       })
-      .catch((err) => setLoadError(err.message || "Could not load campaign."));
+      .catch((err) => setLoadError(err.message || 'Could not load campaign.'));
     api
       .getContributions(id, { limit: showAll ? 100 : 10, offset: 0 })
       .then((data) => {
@@ -260,7 +267,7 @@ export default function Campaign() {
       api
         .listWithdrawals(id)
         .then((withdrawals) => {
-          const hasPending = withdrawals.some((w) => w.status === "pending");
+          const hasPending = withdrawals.some((w) => w.status === 'pending');
           setHasPendingWithdrawal(hasPending);
         })
         .catch(() => setHasPendingWithdrawal(false));
@@ -285,12 +292,12 @@ export default function Campaign() {
     if (!campaign) return;
 
     const isCampaignClosed = [
-      "funded",
-      "closed",
-      "withdrawn",
-      "failed",
-      "completed",
-      "refunded",
+      'funded',
+      'closed',
+      'withdrawn',
+      'failed',
+      'completed',
+      'refunded',
     ].includes(campaign.status);
     if (isCampaignClosed) return;
 
@@ -299,7 +306,7 @@ export default function Campaign() {
 
     const refresh = async () => {
       if (aborted) return;
-      if (document.visibilityState !== "visible") return;
+      if (document.visibilityState !== 'visible') return;
       try {
         const [nextCampaign, nextContributionsData] = await Promise.all([
           api.getCampaign(id),
@@ -315,29 +322,29 @@ export default function Campaign() {
     };
 
     const start = () => {
-      if (intervalId != null) return;
+      if (intervalId !== null) return;
       refresh();
       intervalId = window.setInterval(refresh, 15_000);
     };
 
     const stop = () => {
-      if (intervalId == null) return;
+      if (intervalId === null) return;
       window.clearInterval(intervalId);
       intervalId = null;
     };
 
     const onVisibility = () => {
-      if (document.visibilityState === "visible") start();
+      if (document.visibilityState === 'visible') start();
       else stop();
     };
 
-    document.addEventListener("visibilitychange", onVisibility);
+    document.addEventListener('visibilitychange', onVisibility);
     onVisibility();
 
     return () => {
       aborted = true;
       stop();
-      document.removeEventListener("visibilitychange", onVisibility);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [id, token, isLive, campaign, showAll]);
 
@@ -356,15 +363,11 @@ export default function Campaign() {
         return;
       }
 
-      if (msg.type === "contribution") {
-        setCampaign((prev) =>
-          prev ? { ...prev, raised_amount: msg.raised_amount } : prev,
-        );
+      if (msg.type === 'contribution') {
+        setCampaign((prev) => (prev ? { ...prev, raised_amount: msg.raised_amount } : prev));
         setContributions((prev) => {
           const current = prev || [];
-          const exists = current.some(
-            (c) => c.tx_hash === msg.contribution.tx_hash,
-          );
+          const exists = current.some((c) => c.tx_hash === msg.contribution.tx_hash);
           if (exists) return current;
 
           setTotalContributions((t) => t + 1);
@@ -400,26 +403,26 @@ export default function Campaign() {
       const data = await api.getCloneData(id, token);
       navigate('/campaigns/new', { state: { prefill: data } });
     } catch (err) {
-      alert(err.message || 'Failed to fetch campaign clone data');
+      window.alert(err.message || 'Failed to fetch campaign clone data');
     }
   }
 
   async function handleInviteSubmit(e) {
     e.preventDefault();
     if (!inviteForm.email) {
-      setInviteError("Email is required");
+      setInviteError('Email is required');
       return;
     }
     setInviteBusy(true);
-    setInviteError("");
+    setInviteError('');
     setInviteSuccess(false);
     try {
       const newMember = await api.inviteCampaignMember(id, inviteForm);
       setMembers((prev) => [...prev, newMember]);
-      setInviteForm({ email: "", role: "viewer" });
+      setInviteForm({ email: '', role: 'viewer' });
       setInviteSuccess(true);
     } catch (err) {
-      setInviteError(err.message || "Failed to invite member");
+      setInviteError(err.message || 'Failed to invite member');
     } finally {
       setInviteBusy(false);
     }
@@ -429,79 +432,75 @@ export default function Campaign() {
     try {
       const updated = await api.updateCampaignMemberRole(id, userId, { role: newRole });
       setMembers((prev) =>
-        prev.map((m) =>
-          m.user_id === userId ? { ...m, role: updated.role } : m,
-        ),
+        prev.map((m) => (m.user_id === userId ? { ...m, role: updated.role } : m))
       );
     } catch (err) {
-      alert(err.message || "Failed to update role");
+      window.alert(err.message || 'Failed to update role');
     }
   }
 
   async function handleRemoveMember(userId) {
-    if (!confirm("Are you sure you want to remove this member?")) return;
+    if (!window.confirm('Are you sure you want to remove this member?')) return;
     try {
       await api.removeCampaignMember(id, userId);
       setMembers((prev) => prev.filter((m) => m.user_id !== userId));
     } catch (err) {
-      alert(err.message || "Failed to remove member");
+      window.alert(err.message || 'Failed to remove member');
     }
   }
 
   async function handleResendInvite(memberId) {
     try {
       const updated = await api.resendCampaignInvite(id, memberId);
-      setMembers((prev) =>
-        prev.map((m) => (m.id === memberId ? { ...m, ...updated } : m)),
-      );
+      setMembers((prev) => prev.map((m) => (m.id === memberId ? { ...m, ...updated } : m)));
     } catch (err) {
-      alert(err.message || "Failed to resend invitation");
+      window.alert(err.message || 'Failed to resend invitation');
     }
   }
 
   async function handleCancelInvite(memberId) {
-    if (!confirm("Cancel this pending invitation?")) return;
+    if (!window.confirm('Cancel this pending invitation?')) return;
     try {
       await api.cancelCampaignInvite(id, memberId);
       setMembers((prev) => prev.filter((m) => m.id !== memberId));
     } catch (err) {
-      alert(err.message || "Failed to cancel invitation");
+      window.alert(err.message || 'Failed to cancel invitation');
     }
   }
 
   function handleOpenEditModal() {
     if (!campaign) return;
     setEditFormData({
-      title: campaign.title || "",
-      description: campaign.description || "",
-      deadline: campaign.deadline ? campaign.deadline.split("T")[0] : "",
+      title: campaign.title || '',
+      description: campaign.description || '',
+      deadline: campaign.deadline ? campaign.deadline.split('T')[0] : '',
     });
-    setEditError("");
-    setEditSuccess("");
+    setEditError('');
+    setEditSuccess('');
     setIsEditingCampaign(true);
   }
 
   function handleCloseEditModal() {
     setIsEditingCampaign(false);
-    setEditFormData({ title: "", description: "", deadline: "" });
-    setEditError("");
-    setEditSuccess("");
+    setEditFormData({ title: '', description: '', deadline: '' });
+    setEditError('');
+    setEditSuccess('');
   }
 
   async function handleSaveEdit() {
-    setEditError("");
+    setEditError('');
 
     // Validate form
     if (!editFormData.title.trim()) {
-      setEditError("Title is required");
+      setEditError('Title is required');
       return;
     }
     if (editFormData.title.length > 100) {
-      setEditError("Title must be at most 100 characters");
+      setEditError('Title must be at most 100 characters');
       return;
     }
     if (editFormData.description.length > 1000) {
-      setEditError("Description must be at most 1000 characters");
+      setEditError('Description must be at most 1000 characters');
       return;
     }
     if (editFormData.deadline) {
@@ -510,7 +509,7 @@ export default function Campaign() {
       today.setHours(0, 0, 0, 0);
       deadlineDate.setHours(0, 0, 0, 0);
       if (deadlineDate < today) {
-        setEditError("Deadline cannot be in the past");
+        setEditError('Deadline cannot be in the past');
         return;
       }
     }
@@ -518,19 +517,15 @@ export default function Campaign() {
     try {
       setEditLoading(true);
       const updates = {};
-      if (editFormData.title !== campaign.title)
-        updates.title = editFormData.title;
+      if (editFormData.title !== campaign.title) updates.title = editFormData.title;
       if (editFormData.description !== campaign.description)
         updates.description = editFormData.description;
-      if (
-        editFormData.deadline !==
-        (campaign.deadline ? campaign.deadline.split("T")[0] : "")
-      ) {
+      if (editFormData.deadline !== (campaign.deadline ? campaign.deadline.split('T')[0] : '')) {
         updates.deadline = editFormData.deadline || null;
       }
 
       if (Object.keys(updates).length === 0) {
-        setEditError("No changes to save");
+        setEditError('No changes to save');
         setEditLoading(false);
         return;
       }
@@ -538,11 +533,11 @@ export default function Campaign() {
       const updated = await api.updateCampaign(campaign.id, updates, token);
       setCampaign(updated);
       setIsEditingCampaign(false);
-      setEditFormData({ title: "", description: "", deadline: "" });
-      setEditSuccess("Campaign updated successfully!");
-      setTimeout(() => setEditSuccess(""), 3000);
+      setEditFormData({ title: '', description: '', deadline: '' });
+      setEditSuccess('Campaign updated successfully!');
+      setTimeout(() => setEditSuccess(''), 3000);
     } catch (err) {
-      setEditError(err.message || "Failed to update campaign");
+      setEditError(err.message || 'Failed to update campaign');
     } finally {
       setEditLoading(false);
     }
@@ -550,25 +545,27 @@ export default function Campaign() {
 
   async function handleInitiateRefund() {
     setRefundBusy(true);
-    setRefundError("");
-    setRefundSuccess("");
+    setRefundError('');
+    setRefundSuccess('');
     try {
       const initRes = await api.initiateRefund(campaign.id);
       const unsignedXdr = initRes.unsigned_xdr;
 
       let signedXdr = unsignedXdr;
-      if (user?.wallet_type === "freighter") {
+      if (user?.wallet_type === 'freighter') {
         const network = await getNetwork();
-        if (network?.error) throw new Error("Could not read Freighter network");
+        if (network?.error) throw new Error('Could not read Freighter network');
 
         const signed = await signTransaction(unsignedXdr, {
           networkPassphrase: network?.networkPassphrase,
           address: user?.wallet_public_key,
         });
-        if (signed?.error) throw new Error(signed.error?.message || "Freighter signing failed");
-        if (!signed?.signedTxXdr) throw new Error("Freighter did not return a signed transaction");
+        if (signed?.error) throw new Error(signed.error?.message || 'Freighter signing failed');
+        if (!signed?.signedTxXdr) throw new Error('Freighter did not return a signed transaction');
 
-        const approveRes = await api.approveRefundCreator(campaign.id, { signed_xdr: signed.signedTxXdr });
+        const approveRes = await api.approveRefundCreator(campaign.id, {
+          signed_xdr: signed.signedTxXdr,
+        });
         signedXdr = approveRes.signed_xdr;
       } else {
         const approveRes = await api.approveRefundCreator(campaign.id, {});
@@ -587,26 +584,26 @@ export default function Campaign() {
 
       if (isPlatformApprover) {
         await api.approveRefundPlatform(campaign.id);
-        setRefundSuccess("Campaign contributions successfully refunded!");
+        setRefundSuccess('Campaign contributions successfully refunded!');
       } else {
-        setRefundSuccess("Refund signed by creator. Awaiting platform release.");
+        setRefundSuccess('Refund signed by creator. Awaiting platform release.');
       }
 
       const updatedCampaign = await api.getCampaign(campaign.id);
       setCampaign(updatedCampaign);
     } catch (err) {
-      setRefundError(err.message || "Failed to initiate refund.");
+      setRefundError(err.message || 'Failed to initiate refund.');
     } finally {
       setRefundBusy(false);
     }
   }
   async function handleDeleteCampaign() {
-    setDeleteError("");
+    setDeleteError('');
     if (!campaign) return;
 
     // Check if confirmation matches campaign title
     if (deleteConfirmation !== campaign.title) {
-      setDeleteError("Confirmation does not match campaign title");
+      setDeleteError('Confirmation does not match campaign title');
       return;
     }
 
@@ -614,11 +611,11 @@ export default function Campaign() {
       setDeleteLoading(true);
       await api.deleteCampaign(campaign.id, token);
       setShowDeleteDialog(false);
-      setDeleteConfirmation("");
+      setDeleteConfirmation('');
       // Redirect to home after successful deletion
-      window.location.href = "/";
+      window.location.href = '/';
     } catch (err) {
-      setDeleteError(err.message || "Failed to delete campaign");
+      setDeleteError(err.message || 'Failed to delete campaign');
     } finally {
       setDeleteLoading(false);
     }
@@ -631,37 +628,37 @@ export default function Campaign() {
     // Basic meta tag updates (SPA approach)
     const updateMeta = (name, content, property = false) => {
       let el = document.querySelector(
-        property ? `meta[property="${name}"]` : `meta[name="${name}"]`,
+        property ? `meta[property="${name}"]` : `meta[name="${name}"]`
       );
       if (!el) {
-        el = document.createElement("meta");
-        if (property) el.setAttribute("property", name);
-        else el.setAttribute("name", name);
+        el = document.createElement('meta');
+        if (property) el.setAttribute('property', name);
+        else el.setAttribute('name', name);
         document.head.appendChild(el);
       }
-      el.setAttribute("content", content);
+      el.setAttribute('content', content);
     };
 
-    updateMeta("description", campaign.description || "");
-    updateMeta("og:title", campaign.title, true);
-    updateMeta("og:description", campaign.description || "", true);
-    updateMeta("og:url", window.location.href, true);
+    updateMeta('description', campaign.description || '');
+    updateMeta('og:title', campaign.title, true);
+    updateMeta('og:description', campaign.description || '', true);
+    updateMeta('og:url', window.location.href, true);
     if (campaign.cover_image_url) {
-      updateMeta("og:image", campaign.cover_image_url, true);
-      updateMeta("twitter:image", campaign.cover_image_url);
+      updateMeta('og:image', campaign.cover_image_url, true);
+      updateMeta('twitter:image', campaign.cover_image_url);
     }
-    updateMeta("twitter:card", "summary_large_image");
-    updateMeta("twitter:title", campaign.title);
-    updateMeta("twitter:description", campaign.description || "");
+    updateMeta('twitter:card', 'summary_large_image');
+    updateMeta('twitter:title', campaign.title);
+    updateMeta('twitter:description', campaign.description || '');
   }, [campaign]);
 
   if (loadError && !campaign) {
     return (
-      <main className="container page-narrow" style={{ paddingTop: "2.5rem" }}>
+      <main className="container page-narrow" style={{ paddingTop: '2.5rem' }}>
         <p className="alert alert--error" role="alert">
           {loadError}
         </p>
-        <Link to="/" style={{ color: "var(--color-accent)", fontWeight: 600 }}>
+        <Link to="/" style={{ color: 'var(--color-accent)', fontWeight: 600 }}>
           ← Back home
         </Link>
       </main>
@@ -672,25 +669,19 @@ export default function Campaign() {
     return <CampaignDetailSkeleton />;
   }
 
-  const pct = Math.min(
-    100,
-    (campaign.raised_amount / campaign.target_amount) * 100,
-  ).toFixed(1);
+  const pct = Math.min(100, (campaign.raised_amount / campaign.target_amount) * 100).toFixed(1);
   const currentUserId = user?.id || user?.userId;
   const userRole =
     campaign.user_role ||
-    (currentUserId && String(campaign.creator_id) === String(currentUserId)
-      ? "owner"
-      : null);
-  const canManageTeam = userRole === "owner" || userRole === "manager";
-  const canChangeRoles = userRole === "owner";
-  const canPostUpdate = userRole === "owner" || userRole === "manager";
+    (currentUserId && String(campaign.creator_id) === String(currentUserId) ? 'owner' : null);
+  const canManageTeam = userRole === 'owner' || userRole === 'manager';
+  const canChangeRoles = userRole === 'owner';
+  const canPostUpdate = userRole === 'owner' || userRole === 'manager';
   const canEditCampaign =
-    (userRole === "owner" || userRole === "editor") &&
-    ["active", "funded"].includes(campaign.status);
-  const canViewAnalytics =
-    userRole === "owner" || userRole === "manager" || userRole === "viewer";
-  const isOwner = userRole === "owner";
+    (userRole === 'owner' || userRole === 'editor') &&
+    ['active', 'funded'].includes(campaign.status);
+  const canViewAnalytics = userRole === 'owner' || userRole === 'manager' || userRole === 'viewer';
+  const isOwner = userRole === 'owner';
   const acceptedMembers = members.filter((m) => m.accepted_at);
   const pendingInvites = members.filter((m) => !m.accepted_at);
   const campaignUrl = `${window.location.origin}/campaigns/${id}`;
@@ -700,26 +691,26 @@ export default function Campaign() {
   const badgeMarkdown = `[![CrowdPay](${apiBase}/api/campaigns/${id}/badge.svg)](${campaignUrl})`;
 
   function canEditUpdate(update) {
-    return (
-      Date.now() - new Date(update.created_at).getTime() <= 24 * 60 * 60 * 1000
-    );
+    return Date.now() - new Date(update.created_at).getTime() <= 24 * 60 * 60 * 1000;
   }
 
   function startEditUpdate(update) {
     setEditingUpdateId(update.id);
     setUpdateForm({ title: update.title, body: update.body });
-    setUpdatesError("");
+    setUpdatesError('');
   }
 
   function cancelUpdateEdit() {
     setEditingUpdateId(null);
-    setUpdateForm({ title: "", body: "" });
-    setUpdatesError("");
+    setUpdateForm({ title: '', body: '' });
+    setUpdatesError('');
   }
 
   async function handleFreighterContribute() {
     try {
-      const connected = await isConnected().then((r) => r?.isConnected ?? r).catch(() => false);
+      const connected = await isConnected()
+        .then((r) => r?.isConnected ?? r)
+        .catch(() => false);
       if (!connected) {
         window.open('https://www.freighter.app/', '_blank', 'noopener,noreferrer');
         return;
@@ -733,20 +724,17 @@ export default function Campaign() {
 
   async function submitUpdate(e) {
     e.preventDefault();
-    setUpdatesError("");
+    setUpdatesError('');
     setUpdateBusy(true);
 
     try {
       if (editingUpdateId) {
-        const updated = await api.updateCampaignUpdate(
-          campaign.id,
-          editingUpdateId,
-          { title: updateForm.title.trim(), body: updateForm.body.trim() },
-        );
+        const updated = await api.updateCampaignUpdate(campaign.id, editingUpdateId, {
+          title: updateForm.title.trim(),
+          body: updateForm.body.trim(),
+        });
 
-        setUpdates((prev) =>
-          prev.map((item) => (item.id === editingUpdateId ? updated : item)),
-        );
+        setUpdates((prev) => prev.map((item) => (item.id === editingUpdateId ? updated : item)));
         setEditingUpdateId(null);
       } else {
         const created = await api.postCampaignUpdate(campaign.id, {
@@ -757,49 +745,45 @@ export default function Campaign() {
         setUpdates((prev) => [created, ...prev]);
       }
 
-      setUpdateForm({ title: "", body: "" });
+      setUpdateForm({ title: '', body: '' });
     } catch (err) {
-      setUpdatesError(err.message || "Could not save update");
+      setUpdatesError(err.message || 'Could not save update');
     } finally {
       setUpdateBusy(false);
     }
   }
 
   async function deleteUpdate(updateId) {
-    if (!confirm("Delete this campaign update?")) return;
+    if (!window.confirm('Delete this campaign update?')) return;
 
-    setUpdatesError("");
+    setUpdatesError('');
     try {
       await api.deleteCampaignUpdate(campaign.id, updateId);
       setUpdates((prev) => prev.filter((item) => item.id !== updateId));
     } catch (err) {
-      setUpdatesError(err.message || "Could not delete update");
+      setUpdatesError(err.message || 'Could not delete update');
     }
   }
   return (
     <main
       className="container"
-      style={{ paddingTop: "2.5rem", paddingBottom: "4rem", maxWidth: "760px" }}
+      style={{ paddingTop: '2.5rem', paddingBottom: '4rem', maxWidth: '760px' }}
     >
       {showCreatedBanner && (
-        <div
-          className="alert alert--success"
-          style={{ marginBottom: "1.25rem" }}
-          role="status"
-        >
-          <strong>Campaign is live.</strong> Share the link — contributors can
-          fund in XLM or USDC when conversion paths are available.
+        <div className="alert alert--success" style={{ marginBottom: '1.25rem' }} role="status">
+          <strong>Campaign is live.</strong> Share the link — contributors can fund in XLM or USDC
+          when conversion paths are available.
           <button
             type="button"
             onClick={() => setShowCreatedBanner(false)}
             style={{
-              marginLeft: "0.5rem",
-              background: "transparent",
-              color: "var(--color-success-text)",
-              textDecoration: "underline",
+              marginLeft: '0.5rem',
+              background: 'transparent',
+              color: 'var(--color-success-text)',
+              textDecoration: 'underline',
               fontWeight: 600,
               padding: 0,
-              minHeight: "auto",
+              minHeight: 'auto',
             }}
           >
             Dismiss
@@ -807,133 +791,100 @@ export default function Campaign() {
         </div>
       )}
       {coverUploadError && (
-        <div
-          className="alert alert--warning"
-          style={{ marginBottom: "1.25rem" }}
-          role="status"
-        >
+        <div className="alert alert--warning" style={{ marginBottom: '1.25rem' }} role="status">
           <strong>Cover image upload failed:</strong> {coverUploadError}
         </div>
       )}
-      {campaign.status === "funded" && (
-        <div
-          className="alert alert--success"
-          style={{ marginBottom: "1.25rem" }}
-          role="status"
-        >
-          <strong>Goal reached.</strong> This campaign has met its funding
-          target. Contributions may still be open until the creator closes the
-          campaign.
+      {campaign.status === 'funded' && (
+        <div className="alert alert--success" style={{ marginBottom: '1.25rem' }} role="status">
+          <strong>Goal reached.</strong> This campaign has met its funding target. Contributions may
+          still be open until the creator closes the campaign.
         </div>
       )}
-      {campaign.status === "failed" && (
-        <div
-          className="alert alert--error"
-          style={{ marginBottom: "1.25rem" }}
-          role="status"
-        >
-          <strong>Campaign ended.</strong> This campaign did not reach its goal.
-          Contributions are closed and refunds can be requested.
+      {campaign.status === 'failed' && (
+        <div className="alert alert--error" style={{ marginBottom: '1.25rem' }} role="status">
+          <strong>Campaign ended.</strong> This campaign did not reach its goal. Contributions are
+          closed and refunds can be requested.
         </div>
       )}
-      {campaign.status === "refunded" && (
-        <div
-          className="alert alert--success"
-          style={{ marginBottom: "1.25rem" }}
-          role="status"
-        >
-          <strong>Campaign refunded.</strong> This campaign was refunded — all contributions have been returned to their original senders.
+      {campaign.status === 'refunded' && (
+        <div className="alert alert--success" style={{ marginBottom: '1.25rem' }} role="status">
+          <strong>Campaign refunded.</strong> This campaign was refunded — all contributions have
+          been returned to their original senders.
         </div>
       )}
-      {campaign.status === "failed" &&
-        user &&
-        user.id === campaign.creator_id && (
-          <div
+      {campaign.status === 'failed' && user && user.id === campaign.creator_id && (
+        <div
+          style={{
+            background: 'var(--color-bg-card, #1e1e2f)',
+            border: '1px solid var(--color-border-light)',
+            borderRadius: '10px',
+            padding: '1.1rem 1.25rem',
+            marginBottom: '1.25rem',
+          }}
+        >
+          <p
             style={{
-              background: "var(--color-bg-card, #1e1e2f)",
-              border: "1px solid var(--color-border-light)",
-              borderRadius: "10px",
-              padding: "1.1rem 1.25rem",
-              marginBottom: "1.25rem",
+              margin: '0 0 0.75rem',
+              fontSize: '0.9rem',
+              color: 'var(--color-text-secondary)',
+              lineHeight: 1.55,
             }}
           >
+            This campaign did not reach its goal. You can refund all contributors — this will build
+            and sign a Stellar transaction that returns each contributor&apos;s exact amount.
+          </p>
+          {refundError && (
             <p
-              style={{
-                margin: "0 0 0.75rem",
-                fontSize: "0.9rem",
-                color: "var(--color-text-secondary)",
-                lineHeight: 1.55,
-              }}
+              className="alert alert--error"
+              style={{ marginBottom: '0.75rem', fontSize: '0.875rem' }}
+              role="alert"
             >
-              This campaign did not reach its goal. You can refund all
-              contributors — this will build and sign a Stellar transaction that
-              returns each contributor's exact amount.
+              {refundError}
             </p>
-            {refundError && (
-              <p
-                className="alert alert--error"
-                style={{ marginBottom: "0.75rem", fontSize: "0.875rem" }}
-                role="alert"
-              >
-                {refundError}
-              </p>
-            )}
-            {refundSuccess && (
-              <p
-                className="alert alert--success"
-                style={{ marginBottom: "0.75rem", fontSize: "0.875rem" }}
-                role="status"
-              >
-                {refundSuccess}
-              </p>
-            )}
-            <button
-              id="btn-refund-contributors"
-              type="button"
-              className="btn-primary"
-              disabled={refundBusy}
-              onClick={handleInitiateRefund}
-              style={{
-                background: refundBusy ? undefined : "#dc2626",
-                borderColor: refundBusy ? undefined : "#dc2626",
-                fontSize: "0.9rem",
-              }}
+          )}
+          {refundSuccess && (
+            <p
+              className="alert alert--success"
+              style={{ marginBottom: '0.75rem', fontSize: '0.875rem' }}
+              role="status"
             >
-              {refundBusy ? "Processing refund…" : "Refund contributors"}
-            </button>
-          </div>
-        )}
-      {campaign.creator_kyc_status !== "verified" && (
-        <div
-          className="alert alert--warning"
-          style={{ marginBottom: "1.25rem" }}
-          role="status"
-        >
-          <strong>Legacy campaign:</strong> this campaign was created before
-          creator identity verification was required.
+              {refundSuccess}
+            </p>
+          )}
+          <button
+            id="btn-refund-contributors"
+            type="button"
+            className="btn-primary"
+            disabled={refundBusy}
+            onClick={handleInitiateRefund}
+            style={{
+              background: refundBusy ? undefined : '#dc2626',
+              borderColor: refundBusy ? undefined : '#dc2626',
+              fontSize: '0.9rem',
+            }}
+          >
+            {refundBusy ? 'Processing refund…' : 'Refund contributors'}
+          </button>
+        </div>
+      )}
+      {campaign.creator_kyc_status !== 'verified' && (
+        <div className="alert alert--warning" style={{ marginBottom: '1.25rem' }} role="status">
+          <strong>Legacy campaign:</strong> this campaign was created before creator identity
+          verification was required.
         </div>
       )}
       {editSuccess && (
-        <div
-          className="alert alert--success"
-          style={{ marginBottom: "1.25rem" }}
-          role="status"
-        >
+        <div className="alert alert--success" style={{ marginBottom: '1.25rem' }} role="status">
           {editSuccess}
         </div>
       )}
       {campaign.cover_image_url && (
-        <img
-          src={campaign.cover_image_url}
-          alt={campaign.title}
-          style={styles.detailCoverImage}
-        />
+        <img src={campaign.cover_image_url} alt={campaign.title} style={styles.detailCoverImage} />
       )}
       {!campaign.cover_image_url && (
         <div style={styles.detailCoverPlaceholder} aria-hidden="true">
-          <span style={styles.detailCoverPlaceholderText}>
-            No campaign image yet
-          </span>
+          <span style={styles.detailCoverPlaceholderText}>No campaign image yet</span>
         </div>
       )}
       <div style={styles.header}>
@@ -943,9 +894,7 @@ export default function Campaign() {
           <VerificationBadge status={campaign.creator_kyc_status} />
         </div>
         <h1 style={styles.title}>{campaign.title}</h1>
-        {campaign.creator_name && (
-          <p style={styles.creator}>by {campaign.creator_name}</p>
-        )}
+        {campaign.creator_name && <p style={styles.creator}>by {campaign.creator_name}</p>}
         <p style={styles.desc}>{campaign.description}</p>
       </div>
 
@@ -982,7 +931,7 @@ export default function Campaign() {
                   <span style={{ ...styles.small, fontWeight: 700, marginLeft: "auto" }}>
                     {tier.sold_out
                       ? "Sold out"
-                      : tier.remaining == null
+                      : tier.remaining === null || tier.remaining === undefined
                       ? "Unlimited backers"
                       : `${Number(tier.remaining).toLocaleString()} remaining`}
                   </span>
@@ -997,18 +946,16 @@ export default function Campaign() {
         <div style={styles.amounts}>
           <div>
             <div style={styles.big}>
-              {Number(campaign.raised_amount).toLocaleString()}{" "}
-              {campaign.asset_type}
+              {Number(campaign.raised_amount).toLocaleString()} {campaign.asset_type}
             </div>
             <div style={styles.small}>
               raised of {Number(campaign.target_amount).toLocaleString()} goal
             </div>
           </div>
-          <div style={{ textAlign: "right" }}>
+          <div style={{ textAlign: 'right' }}>
             <div style={styles.big}>{pct}%</div>
             <div style={styles.small}>
-              funded by <strong>{campaign.contributor_count || 0}</strong>{" "}
-              backers
+              funded by <strong>{campaign.contributor_count || 0}</strong> backers
             </div>
           </div>
         </div>
@@ -1033,52 +980,55 @@ export default function Campaign() {
 
         {campaign.status === 'refunded' ? (
           <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', lineHeight: 1.5 }}>
-            This campaign has been <strong>refunded</strong>. All contributions were returned to their original senders.
+            This campaign has been <strong>refunded</strong>. All contributions were returned to
+            their original senders.
           </p>
         ) : ['failed', 'closed', 'withdrawn'].includes(campaign.status) ? (
           <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', lineHeight: 1.5 }}>
-            Contributions are closed while this campaign is{' '}
-            <strong>{campaign.status}</strong>.
+            Contributions are closed while this campaign is <strong>{campaign.status}</strong>.
           </p>
+        ) : user ? (
+          <button
+            type="button"
+            className="btn-primary"
+            style={styles.cta}
+            ref={contributeBtnRef}
+            aria-label={`Contribute to ${campaign.title}`}
+            onClick={() => setShowModal(true)}
+          >
+            Contribute
+          </button>
         ) : (
-          user ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+            <Link
+              to="/login"
+              state={{ from: `/campaigns/${id}` }}
+              className="btn-primary"
+              style={{
+                ...styles.cta,
+                textAlign: 'center',
+                textDecoration: 'none',
+                display: 'block',
+              }}
+            >
+              Log in to contribute
+            </Link>
             <button
               type="button"
-              className="btn-primary"
+              className="btn-secondary"
               style={styles.cta}
-              ref={contributeBtnRef}
-              aria-label={`Contribute to ${campaign.title}`}
-              onClick={() => setShowModal(true)}
+              onClick={handleFreighterContribute}
             >
-              Contribute
+              Contribute with Freighter
             </button>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-              <Link
-                to="/login"
-                state={{ from: `/campaigns/${id}` }}
-                className="btn-primary"
-                style={{ ...styles.cta, textAlign: 'center', textDecoration: 'none', display: 'block' }}
-              >
-                Log in to contribute
-              </Link>
-              <button
-                type="button"
-                className="btn-secondary"
-                style={styles.cta}
-                onClick={handleFreighterContribute}
-              >
-                Contribute with Freighter
-              </button>
-            </div>
-          )
+          </div>
         )}
 
         {user && (
           <button
             type="button"
             className="btn-secondary"
-            style={{ ...styles.cta, marginTop: "0.75rem" }}
+            style={{ ...styles.cta, marginTop: '0.75rem' }}
             onClick={handleClone}
           >
             Clone campaign
@@ -1089,10 +1039,10 @@ export default function Campaign() {
       <div
         data-no-print
         style={{
-          display: "flex",
-          gap: "0.65rem",
-          marginBottom: "1.75rem",
-          flexWrap: "wrap",
+          display: 'flex',
+          gap: '0.65rem',
+          marginBottom: '1.75rem',
+          flexWrap: 'wrap',
         }}
       >
         {navigator.share && (
@@ -1101,11 +1051,11 @@ export default function Campaign() {
             className="btn-secondary"
             style={{
               flex: 1,
-              fontSize: "0.85rem",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "0.5rem",
+              fontSize: '0.85rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
             }}
             onClick={async () => {
               try {
@@ -1115,8 +1065,8 @@ export default function Campaign() {
                   url: referralUrl || window.location.href,
                 });
               } catch (err) {
-                if (err.name !== "AbortError") {
-                  console.error("Share failed:", err);
+                if (err.name !== 'AbortError') {
+                  console.error('Share failed:', err);
                 }
               }
             }}
@@ -1129,21 +1079,18 @@ export default function Campaign() {
           className="btn-secondary"
           style={{
             flex: 1,
-            fontSize: "0.85rem",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "0.5rem",
+            fontSize: '0.85rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.5rem',
           }}
           onClick={() => {
             const shareUrl = referralUrl || window.location.href;
             const text = encodeURIComponent(
-              `I just backed ${campaign.title} on CrowdPay — ${pct}% funded with ${campaign.contributor_count || 0} backers. Join me: ${shareUrl}`,
+              `I just backed ${campaign.title} on CrowdPay — ${pct}% funded with ${campaign.contributor_count || 0} backers. Join me: ${shareUrl}`
             );
-            window.open(
-              `https://twitter.com/intent/tweet?text=${text}`,
-              "_blank",
-            );
+            window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank');
           }}
         >
           Share on X
@@ -1153,37 +1100,37 @@ export default function Campaign() {
           className="btn-secondary"
           style={{
             flex: 1,
-            fontSize: "0.85rem",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "0.5rem",
+            fontSize: '0.85rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.5rem',
           }}
           onClick={() => {
             const shareUrl = referralUrl || window.location.href;
             const text = encodeURIComponent(
-              `I just backed ${campaign.title} on CrowdPay — ${pct}% funded with ${campaign.contributor_count || 0} backers. Join me: ${shareUrl}`,
+              `I just backed ${campaign.title} on CrowdPay — ${pct}% funded with ${campaign.contributor_count || 0} backers. Join me: ${shareUrl}`
             );
-            window.open(`https://wa.me/?text=${text}`, "_blank");
+            window.open(`https://wa.me/?text=${text}`, '_blank');
           }}
         >
           WhatsApp
         </button>
-        <div style={{ position: "relative", flex: 1 }}>
+        <div style={{ position: 'relative', flex: 1 }}>
           <button
             type="button"
             className="btn-secondary"
             style={{
-              fontSize: "0.85rem",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "0.5rem",
-              width: "100%",
-              background: linkCopied ? "var(--color-success-text)" : undefined,
-              borderColor: linkCopied ? "var(--color-success-text)" : undefined,
-              color: linkCopied ? "#fff" : undefined,
-              transition: "all 0.2s ease",
+              fontSize: '0.85rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              width: '100%',
+              background: linkCopied ? 'var(--color-success-text)' : undefined,
+              borderColor: linkCopied ? 'var(--color-success-text)' : undefined,
+              color: linkCopied ? '#fff' : undefined,
+              transition: 'all 0.2s ease',
             }}
             onClick={() => {
               navigator.clipboard.writeText(referralUrl || window.location.href);
@@ -1191,7 +1138,7 @@ export default function Campaign() {
               setTimeout(() => setLinkCopied(false), 2000);
             }}
           >
-            {linkCopied ? "Copied!" : "Copy link"}
+            {linkCopied ? 'Copied!' : 'Copy link'}
           </button>
         </div>
       </div>
@@ -1201,46 +1148,45 @@ export default function Campaign() {
         <div
           data-no-print
           style={{
-            display: "flex",
-            gap: "0.65rem",
-            marginBottom: "1.75rem",
+            display: 'flex',
+            gap: '0.65rem',
+            marginBottom: '1.75rem',
           }}
         >
-
+          <button
+            type="button"
+            className="btn-secondary"
+            style={{
+              flex: 1,
+              fontSize: '0.85rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+            }}
+            onClick={handleOpenEditModal}
+          >
+            Edit Campaign
+          </button>
+          {isOwner && campaign.status === 'active' && !hasPendingWithdrawal && (
             <button
               type="button"
               className="btn-secondary"
               style={{
-                flex: 1,
-                fontSize: "0.85rem",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "0.5rem",
+                color: '#dc2626',
+                fontSize: '0.85rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem',
               }}
-              onClick={handleOpenEditModal}
+              onClick={() => setShowDeleteDialog(true)}
             >
-              Edit Campaign
+              Delete campaign
             </button>
-            {isOwner && campaign.status === "active" && !hasPendingWithdrawal && (
-              <button
-                type="button"
-                className="btn-secondary"
-                style={{
-                  color: "#dc2626",
-                  fontSize: "0.85rem",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "0.5rem",
-                }}
-                onClick={() => setShowDeleteDialog(true)}
-              >
-                Delete campaign
-              </button>
-            )}
-          </div>
-        )}
+          )}
+        </div>
+      )}
 
       <div style={styles.walletInfo}>
         <span style={styles.walletLabel}>Campaign wallet</span>
@@ -1248,26 +1194,27 @@ export default function Campaign() {
       </div>
 
       <div style={{ marginBottom: '1.75rem' }}>
-        <button type="button" className="btn-secondary" data-no-print onClick={() => setShowQR((v) => !v)}>
+        <button
+          type="button"
+          className="btn-secondary"
+          data-no-print
+          onClick={() => setShowQR((v) => !v)}
+        >
           {showQR ? 'Hide QR code' : 'Show QR code'}
         </button>
         {showQR && (
           <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'center' }}>
-            <CampaignQRCode url={referralUrl || `${window.location.origin}/campaigns/${id}`} size={200} />
+            <CampaignQRCode
+              url={referralUrl || `${window.location.origin}/campaigns/${id}`}
+              size={200}
+            />
           </div>
         )}
       </div>
 
-      <details style={{ ...styles.card, marginTop: "-0.75rem" }}>
-        <summary style={styles.embedSummary}>
-          Embed on your site
-        </summary>
-        <p style={{ fontSize: "0.82rem", color: "var(--color-text-hint)", marginTop: "0.75rem" }}>
-          Compact widget (GitHub README, docs):
-        </p>
-        <pre style={{ ...styles.embedCode, marginTop: "0.5rem" }}>
-          {widgetEmbedCode}
-        </pre>
+      <details style={{ ...styles.card, marginTop: '-0.75rem' }}>
+        <summary style={styles.embedSummary}>Embed on your site</summary>
+        <pre style={{ ...styles.embedCode, marginTop: '0.75rem' }}>{widgetEmbedCode}</pre>
         <button
           type="button"
           onClick={() => {
@@ -1277,28 +1224,9 @@ export default function Campaign() {
             });
           }}
           className="btn-secondary"
-          style={{ marginTop: "0.5rem", fontSize: "0.85rem", minHeight: "auto" }}
+          style={{ marginTop: '0.75rem', fontSize: '0.85rem', minHeight: 'auto' }}
         >
-          {embedCopied ? "Copied!" : "Copy widget snippet"}
-        </button>
-        <p style={{ fontSize: "0.82rem", color: "var(--color-text-hint)", marginTop: "0.85rem" }}>
-          README badge (live funding stats):
-        </p>
-        <pre style={{ ...styles.embedCode, marginTop: "0.5rem" }}>
-          {badgeMarkdown}
-        </pre>
-        <button
-          type="button"
-          onClick={() => {
-            navigator.clipboard.writeText(badgeMarkdown).then(() => {
-              setBadgeCopied(true);
-              setTimeout(() => setBadgeCopied(false), 2000);
-            });
-          }}
-          className="btn-secondary"
-          style={{ marginTop: "0.5rem", fontSize: "0.85rem", minHeight: "auto" }}
-        >
-          {badgeCopied ? "Copied!" : "Copy badge markdown"}
+          {embedCopied ? 'Copied!' : 'Copy snippet'}
         </button>
       </details>
 
@@ -1306,25 +1234,24 @@ export default function Campaign() {
       {user &&
         contributions?.some((c) => c.sender_public_key) &&
         campaign.creator_id !== user.id && (
-          <div style={{ marginBottom: "1.25rem" }} data-no-print>
+          <div style={{ marginBottom: '1.25rem' }} data-no-print>
             {disputeSubmitted ? (
               <p className="alert alert--success" role="status">
-                Your dispute has been submitted. The platform team will review
-                it shortly.
+                Your dispute has been submitted. The platform team will review it shortly.
               </p>
             ) : (
               <button
                 type="button"
                 onClick={() => setShowDisputeModal(true)}
                 style={{
-                  background: "none",
-                  border: "none",
-                  color: "var(--color-status-error)",
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--color-status-error)',
                   fontWeight: 600,
-                  fontSize: "0.9rem",
-                  cursor: "pointer",
+                  fontSize: '0.9rem',
+                  cursor: 'pointer',
                   padding: 0,
-                  textDecoration: "underline",
+                  textDecoration: 'underline',
                 }}
               >
                 ⚠ Report a problem with this campaign
@@ -1336,28 +1263,26 @@ export default function Campaign() {
         <div style={styles.card} data-no-print>
           <div
             style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "1rem",
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '1rem',
             }}
           >
-            <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700 }}>
-              Embed this campaign
-            </h3>
+            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Embed this campaign</h3>
             <button
               type="button"
               onClick={() => setShowEmbedSection(!showEmbedSection)}
               style={{
-                background: "transparent",
-                color: "var(--color-accent)",
-                border: "1px solid var(--color-accent)",
-                padding: "0.4rem 0.8rem",
-                fontSize: "0.85rem",
-                minHeight: "auto",
+                background: 'transparent',
+                color: 'var(--color-accent)',
+                border: '1px solid var(--color-accent)',
+                padding: '0.4rem 0.8rem',
+                fontSize: '0.85rem',
+                minHeight: 'auto',
               }}
             >
-              {showEmbedSection ? "Hide" : "Show"}
+              {showEmbedSection ? 'Hide' : 'Show'}
             </button>
           </div>
 
@@ -1365,30 +1290,32 @@ export default function Campaign() {
             <>
               <p
                 style={{
-                  fontSize: "0.85rem",
-                  color: "var(--color-text-hint)",
-                  marginBottom: "1rem",
+                  fontSize: '0.85rem',
+                  color: 'var(--color-text-hint)',
+                  marginBottom: '1rem',
                   lineHeight: 1.5,
                 }}
               >
-                Add these snippets to your website, GitHub README, or docs. Stats update
-                automatically — no need to re-copy.
+                Add this embed code to your website or blog to display a live funding widget for
+                this campaign.
               </p>
 
-              <div style={{ marginBottom: "1rem" }}>
+              <div style={{ marginBottom: '1rem' }}>
                 <label
                   style={{
-                    fontSize: "0.8rem",
+                    fontSize: '0.8rem',
                     fontWeight: 600,
-                    color: "var(--color-text-hint)",
-                    display: "block",
-                    marginBottom: "0.5rem",
+                    color: 'var(--color-text-hint)',
+                    display: 'block',
+                    marginBottom: '0.5rem',
                   }}
                 >
                   Compact widget (iframe)
                 </label>
-                <div style={{ position: "relative" }}>
-                  <pre style={styles.embedCode}>{widgetEmbedCode}</pre>
+                <div style={{ position: 'relative' }}>
+                  <pre style={styles.embedCode}>
+                    {`<iframe src="${window.location.origin}/embed/campaigns/${campaign.id}" \n        width="480" height="280" frameborder="0">\n</iframe>`}
+                  </pre>
                   <button
                     type="button"
                     onClick={() => {
@@ -1398,19 +1325,17 @@ export default function Campaign() {
                       });
                     }}
                     style={{
-                      position: "absolute",
-                      top: "0.5rem",
-                      right: "0.5rem",
-                      background: embedCopied
-                        ? "var(--color-success-text)"
-                        : "var(--color-accent)",
-                      color: "#fff",
-                      padding: "0.4rem 0.8rem",
-                      fontSize: "0.8rem",
-                      minHeight: "auto",
+                      position: 'absolute',
+                      top: '0.5rem',
+                      right: '0.5rem',
+                      background: embedCopied ? 'var(--color-success-text)' : 'var(--color-accent)',
+                      color: '#fff',
+                      padding: '0.4rem 0.8rem',
+                      fontSize: '0.8rem',
+                      minHeight: 'auto',
                     }}
                   >
-                    {embedCopied ? "Copied!" : "Copy"}
+                    {embedCopied ? 'Copied!' : 'Copy'}
                   </button>
                 </div>
               </div>
@@ -1498,11 +1423,11 @@ export default function Campaign() {
               <div>
                 <label
                   style={{
-                    fontSize: "0.8rem",
+                    fontSize: '0.8rem',
                     fontWeight: 600,
-                    color: "var(--color-text-hint)",
-                    display: "block",
-                    marginBottom: "0.5rem",
+                    color: 'var(--color-text-hint)',
+                    display: 'block',
+                    marginBottom: '0.5rem',
                   }}
                 >
                   Preview
@@ -1515,8 +1440,8 @@ export default function Campaign() {
                     frameBorder="0"
                     title="Campaign widget preview"
                     style={{
-                      border: "1px solid var(--color-border-light)",
-                      borderRadius: "6px",
+                      border: '1px solid var(--color-border-light)',
+                      borderRadius: '6px',
                     }}
                   />
                 </div>
@@ -1528,22 +1453,22 @@ export default function Campaign() {
 
       {token && (
         <div id="withdrawals" data-no-print>
-        <WithdrawalsSection
-          campaign={campaign}
-          milestones={milestones}
-          user={user}
-          token={token}
-          onReleased={() => {
-            api
-              .getCampaign(id)
-              .then(setCampaign)
-              .catch(() => {});
-            api
-              .getMilestones(id)
-              .then(setMilestones)
-              .catch(() => {});
-          }}
-        />
+          <WithdrawalsSection
+            campaign={campaign}
+            milestones={milestones}
+            user={user}
+            token={token}
+            onReleased={() => {
+              api
+                .getCampaign(id)
+                .then(setCampaign)
+                .catch(() => {});
+              api
+                .getMilestones(id)
+                .then(setMilestones)
+                .catch(() => {});
+            }}
+          />
         </div>
       )}
 
@@ -1552,33 +1477,30 @@ export default function Campaign() {
         isCreator={!!(user?.id && campaign.creator_id === user.id)}
       />
 
-      <MilestoneTracker
-        milestones={milestones}
-        assetType={campaign.asset_type}
-      />
+      <MilestoneTracker milestones={milestones} assetType={campaign.asset_type} />
       {canManageTeam && (
-        <div style={{ marginBottom: "2rem" }} data-no-print>
+        <div style={{ marginBottom: '2rem' }} data-no-print>
           <div
             style={{
-              display: "flex",
-              gap: "0.5rem",
-              marginBottom: "1rem",
-              borderBottom: "1px solid var(--color-border-lighter)",
-              paddingBottom: "0.5rem",
+              display: 'flex',
+              gap: '0.5rem',
+              marginBottom: '1rem',
+              borderBottom: '1px solid var(--color-border-lighter)',
+              paddingBottom: '0.5rem',
             }}
           >
             <button
               type="button"
-              onClick={() => setActiveTab("team")}
+              onClick={() => setActiveTab('team')}
               style={{
-                background: activeTab === "team" ? "var(--color-accent)" : "transparent",
-                color: activeTab === "team" ? "#fff" : "var(--color-text-primary)",
-                border: "1px solid var(--color-border-light)",
-                borderRadius: "6px",
-                padding: "0.4rem 0.9rem",
+                background: activeTab === 'team' ? 'var(--color-accent)' : 'transparent',
+                color: activeTab === 'team' ? '#fff' : 'var(--color-text-primary)',
+                border: '1px solid var(--color-border-light)',
+                borderRadius: '6px',
+                padding: '0.4rem 0.9rem',
                 fontWeight: 600,
-                fontSize: "0.85rem",
-                cursor: "pointer",
+                fontSize: '0.85rem',
+                cursor: 'pointer',
               }}
             >
               Team
@@ -1586,16 +1508,16 @@ export default function Campaign() {
             {canViewAnalytics && (
               <button
                 type="button"
-                onClick={() => setActiveTab("analytics")}
+                onClick={() => setActiveTab('analytics')}
                 style={{
-                  background: activeTab === "analytics" ? "var(--color-accent)" : "transparent",
-                  color: activeTab === "analytics" ? "#fff" : "var(--color-text-primary)",
-                  border: "1px solid var(--color-border-light)",
-                  borderRadius: "6px",
-                  padding: "0.4rem 0.9rem",
+                  background: activeTab === 'analytics' ? 'var(--color-accent)' : 'transparent',
+                  color: activeTab === 'analytics' ? '#fff' : 'var(--color-text-primary)',
+                  border: '1px solid var(--color-border-light)',
+                  borderRadius: '6px',
+                  padding: '0.4rem 0.9rem',
                   fontWeight: 600,
-                  fontSize: "0.85rem",
-                  cursor: "pointer",
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
                 }}
               >
                 Analytics
@@ -1603,279 +1525,269 @@ export default function Campaign() {
             )}
           </div>
 
-          {(activeTab !== "analytics") && (
-          <>
-          <h2 style={styles.sectionTitle}>Team</h2>
-          <div className="campaign-card" style={{ marginBottom: "1.5rem" }}>
-            <strong style={{ marginBottom: "0.75rem", display: "block" }}>
-              Invite Team Member
-            </strong>
-            <form
-              onSubmit={handleInviteSubmit}
-              style={{
-                display: "flex",
-                gap: "0.75rem",
-                flexWrap: "wrap",
-                alignItems: "flex-end",
-              }}
-            >
-              <div style={{ flex: "1 1 250px" }}>
-                <label
+          {activeTab !== 'analytics' && (
+            <>
+              <h2 style={styles.sectionTitle}>Team</h2>
+              <div className="campaign-card" style={{ marginBottom: '1.5rem' }}>
+                <strong style={{ marginBottom: '0.75rem', display: 'block' }}>
+                  Invite Team Member
+                </strong>
+                <form
+                  onSubmit={handleInviteSubmit}
                   style={{
-                    fontSize: "0.85rem",
-                    color: "var(--color-text-hint)",
-                    display: "block",
-                    marginBottom: "0.25rem",
+                    display: 'flex',
+                    gap: '0.75rem',
+                    flexWrap: 'wrap',
+                    alignItems: 'flex-end',
                   }}
                 >
-                  Email
-                </label>
-                <input
-                  type="email"
-                  placeholder="member@example.com"
-                  value={inviteForm.email}
-                  onChange={(e) =>
-                    setInviteForm((s) => ({ ...s, email: e.target.value }))
-                  }
-                  required
-                  style={{ width: "100%" }}
-                />
-              </div>
-              <div style={{ width: "140px" }}>
-                <label
-                  style={{
-                    fontSize: "0.85rem",
-                    color: "var(--color-text-hint)",
-                    display: "block",
-                    marginBottom: "0.25rem",
-                  }}
-                >
-                  Role
-                </label>
-                <select
-                  value={inviteForm.role}
-                  onChange={(e) =>
-                    setInviteForm((s) => ({ ...s, role: e.target.value }))
-                  }
-                  style={{ width: "100%", padding: "0.5rem" }}
-                >
-                  <option value="viewer">Viewer</option>
-                  <option value="editor">Editor</option>
-                  <option value="manager">Manager</option>
-                  {canChangeRoles && <option value="owner">Owner</option>}
-                </select>
-              </div>
-              <button
-                type="submit"
-                className="btn-primary"
-                disabled={inviteBusy}
-                style={{ height: "38px" }}
-              >
-                {inviteBusy ? "Sending…" : "Invite"}
-              </button>
-            </form>
-            {inviteError && (
-              <p
-                className="alert alert--error"
-                style={{ marginTop: "0.75rem" }}
-              >
-                {inviteError}
-              </p>
-            )}
-            {inviteSuccess && (
-              <p
-                className="alert alert--success"
-                style={{ marginTop: "0.75rem" }}
-              >
-                Invitation sent!
-              </p>
-            )}
-          </div>
-
-          {pendingInvites.length > 0 && (
-            <div className="campaign-card" style={{ marginBottom: "1.5rem" }}>
-              <strong style={{ marginBottom: "0.75rem", display: "block" }}>
-                Pending Invitations
-              </strong>
-              <div style={{ display: "grid", gap: "0.75rem" }}>
-                {pendingInvites.map((member) => (
-                  <div
-                    key={member.id}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      gap: "1rem",
-                      flexWrap: "wrap",
-                      borderBottom: "1px solid var(--color-border-lighter)",
-                      paddingBottom: "0.5rem",
-                    }}
-                  >
-                    <div>
-                      <span style={{ fontWeight: 600 }}>{member.email}</span>
-                      <span
-                        style={{
-                          marginLeft: "0.5rem",
-                          fontSize: "0.75rem",
-                          fontWeight: 700,
-                          textTransform: "uppercase",
-                          color: "var(--color-warning-text)",
-                          background: "var(--color-warning-bg)",
-                          padding: "0.15rem 0.45rem",
-                          borderRadius: "4px",
-                        }}
-                      >
-                        {member.role}
-                      </span>
-                      {member.invite_expires_at && (
-                        <div style={{ fontSize: "0.75rem", color: "var(--color-text-hint)", marginTop: "0.25rem" }}>
-                          Expires {new Date(member.invite_expires_at).toLocaleDateString()}
-                        </div>
-                      )}
-                    </div>
-                    <div style={{ display: "flex", gap: "0.5rem" }}>
-                      <button
-                        type="button"
-                        className="btn-secondary"
-                        onClick={() => handleResendInvite(member.id)}
-                        style={{ padding: "0.25rem 0.5rem", fontSize: "0.85rem" }}
-                      >
-                        Resend
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-secondary"
-                        onClick={() => handleCancelInvite(member.id)}
-                        style={{
-                          padding: "0.25rem 0.5rem",
-                          fontSize: "0.85rem",
-                          color: "var(--color-status-error)",
-                          borderColor: "var(--color-status-error)",
-                        }}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="campaign-card">
-            <strong style={{ marginBottom: "0.75rem", display: "block" }}>
-              Team Members
-            </strong>
-            {acceptedMembers.length === 0 ? (
-              <p style={{ color: "var(--color-text-muted)" }}>
-                No accepted team members yet.
-              </p>
-            ) : (
-              <div style={{ display: "grid", gap: "0.75rem" }}>
-                {acceptedMembers.map((member) => (
-                  <div
-                    key={member.id}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      gap: "1rem",
-                      borderBottom: "1px solid var(--color-border-lighter)",
-                      paddingBottom: "0.5rem",
-                    }}
-                  >
-                    <div>
-                      <span style={{ fontWeight: 600 }}>{member.email}</span>
-                      {member.user_name && (
-                        <span
-                          style={{
-                            color: "var(--color-text-hint)",
-                            fontSize: "0.85rem",
-                            marginLeft: "0.5rem",
-                          }}
-                        >
-                          ({member.user_name})
-                        </span>
-                      )}
-                      <span
-                        style={{
-                          marginLeft: "0.5rem",
-                          fontSize: "0.75rem",
-                          fontWeight: 700,
-                          textTransform: "uppercase",
-                          color: "var(--color-accent)",
-                          background: "var(--color-accent-bg, rgba(99,102,241,0.1))",
-                          padding: "0.15rem 0.45rem",
-                          borderRadius: "4px",
-                        }}
-                      >
-                        {member.role}
-                      </span>
-                    </div>
-                    <div
+                  <div style={{ flex: '1 1 250px' }}>
+                    <label
                       style={{
-                        display: "flex",
-                        gap: "0.5rem",
-                        alignItems: "center",
+                        fontSize: '0.85rem',
+                        color: 'var(--color-text-hint)',
+                        display: 'block',
+                        marginBottom: '0.25rem',
                       }}
                     >
-                      {canChangeRoles && member.user_id ? (
-                        <select
-                          value={member.role}
-                          onChange={(e) =>
-                            handleRoleChange(member.user_id, e.target.value)
-                          }
-                          disabled={String(member.user_id) === String(user?.id)}
-                          style={{ padding: "0.25rem", fontSize: "0.85rem" }}
-                        >
-                          <option value="viewer">Viewer</option>
-                          <option value="editor">Editor</option>
-                          <option value="manager">Manager</option>
-                          <option value="owner">Owner</option>
-                        </select>
-                      ) : (
-                        <span style={{ fontSize: "0.85rem", color: "var(--color-text-hint)" }}>
-                          {member.role}
-                        </span>
-                      )}
-                      {(canChangeRoles || String(member.user_id) === String(user?.id)) &&
-                        member.user_id && (
-                        <button
-                          className="btn-secondary"
-                          onClick={() => handleRemoveMember(member.user_id)}
-                          disabled={
-                            canChangeRoles &&
-                            String(member.user_id) === String(user?.id) &&
-                            member.role === "owner"
-                          }
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      placeholder="member@example.com"
+                      value={inviteForm.email}
+                      onChange={(e) => setInviteForm((s) => ({ ...s, email: e.target.value }))}
+                      required
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                  <div style={{ width: '140px' }}>
+                    <label
+                      style={{
+                        fontSize: '0.85rem',
+                        color: 'var(--color-text-hint)',
+                        display: 'block',
+                        marginBottom: '0.25rem',
+                      }}
+                    >
+                      Role
+                    </label>
+                    <select
+                      value={inviteForm.role}
+                      onChange={(e) => setInviteForm((s) => ({ ...s, role: e.target.value }))}
+                      style={{ width: '100%', padding: '0.5rem' }}
+                    >
+                      <option value="viewer">Viewer</option>
+                      <option value="editor">Editor</option>
+                      <option value="manager">Manager</option>
+                      {canChangeRoles && <option value="owner">Owner</option>}
+                    </select>
+                  </div>
+                  <button
+                    type="submit"
+                    className="btn-primary"
+                    disabled={inviteBusy}
+                    style={{ height: '38px' }}
+                  >
+                    {inviteBusy ? 'Sending…' : 'Invite'}
+                  </button>
+                </form>
+                {inviteError && (
+                  <p className="alert alert--error" style={{ marginTop: '0.75rem' }}>
+                    {inviteError}
+                  </p>
+                )}
+                {inviteSuccess && (
+                  <p className="alert alert--success" style={{ marginTop: '0.75rem' }}>
+                    Invitation sent!
+                  </p>
+                )}
+              </div>
+
+              {pendingInvites.length > 0 && (
+                <div className="campaign-card" style={{ marginBottom: '1.5rem' }}>
+                  <strong style={{ marginBottom: '0.75rem', display: 'block' }}>
+                    Pending Invitations
+                  </strong>
+                  <div style={{ display: 'grid', gap: '0.75rem' }}>
+                    {pendingInvites.map((member) => (
+                      <div
+                        key={member.id}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: '1rem',
+                          flexWrap: 'wrap',
+                          borderBottom: '1px solid var(--color-border-lighter)',
+                          paddingBottom: '0.5rem',
+                        }}
+                      >
+                        <div>
+                          <span style={{ fontWeight: 600 }}>{member.email}</span>
+                          <span
+                            style={{
+                              marginLeft: '0.5rem',
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              textTransform: 'uppercase',
+                              color: 'var(--color-warning-text)',
+                              background: 'var(--color-warning-bg)',
+                              padding: '0.15rem 0.45rem',
+                              borderRadius: '4px',
+                            }}
+                          >
+                            {member.role}
+                          </span>
+                          {member.invite_expires_at && (
+                            <div
+                              style={{
+                                fontSize: '0.75rem',
+                                color: 'var(--color-text-hint)',
+                                marginTop: '0.25rem',
+                              }}
+                            >
+                              Expires {new Date(member.invite_expires_at).toLocaleDateString()}
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            onClick={() => handleResendInvite(member.id)}
+                            style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}
+                          >
+                            Resend
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            onClick={() => handleCancelInvite(member.id)}
+                            style={{
+                              padding: '0.25rem 0.5rem',
+                              fontSize: '0.85rem',
+                              color: 'var(--color-status-error)',
+                              borderColor: 'var(--color-status-error)',
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="campaign-card">
+                <strong style={{ marginBottom: '0.75rem', display: 'block' }}>Team Members</strong>
+                {acceptedMembers.length === 0 ? (
+                  <p style={{ color: 'var(--color-text-muted)' }}>No accepted team members yet.</p>
+                ) : (
+                  <div style={{ display: 'grid', gap: '0.75rem' }}>
+                    {acceptedMembers.map((member) => (
+                      <div
+                        key={member.id}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: '1rem',
+                          borderBottom: '1px solid var(--color-border-lighter)',
+                          paddingBottom: '0.5rem',
+                        }}
+                      >
+                        <div>
+                          <span style={{ fontWeight: 600 }}>{member.email}</span>
+                          {member.user_name && (
+                            <span
+                              style={{
+                                color: 'var(--color-text-hint)',
+                                fontSize: '0.85rem',
+                                marginLeft: '0.5rem',
+                              }}
+                            >
+                              ({member.user_name})
+                            </span>
+                          )}
+                          <span
+                            style={{
+                              marginLeft: '0.5rem',
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              textTransform: 'uppercase',
+                              color: 'var(--color-accent)',
+                              background: 'var(--color-accent-bg, rgba(99,102,241,0.1))',
+                              padding: '0.15rem 0.45rem',
+                              borderRadius: '4px',
+                            }}
+                          >
+                            {member.role}
+                          </span>
+                        </div>
+                        <div
                           style={{
-                            padding: "0.25rem 0.5rem",
-                            fontSize: "0.85rem",
-                            color: "var(--color-status-error)",
-                            borderColor: "var(--color-status-error)",
+                            display: 'flex',
+                            gap: '0.5rem',
+                            alignItems: 'center',
                           }}
                         >
-                          {String(member.user_id) === String(user?.id) ? "Leave" : "Remove"}
-                        </button>
-                      )}
-                    </div>
+                          {canChangeRoles && member.user_id ? (
+                            <select
+                              value={member.role}
+                              onChange={(e) => handleRoleChange(member.user_id, e.target.value)}
+                              disabled={String(member.user_id) === String(user?.id)}
+                              style={{ padding: '0.25rem', fontSize: '0.85rem' }}
+                            >
+                              <option value="viewer">Viewer</option>
+                              <option value="editor">Editor</option>
+                              <option value="manager">Manager</option>
+                              <option value="owner">Owner</option>
+                            </select>
+                          ) : (
+                            <span style={{ fontSize: '0.85rem', color: 'var(--color-text-hint)' }}>
+                              {member.role}
+                            </span>
+                          )}
+                          {(canChangeRoles || String(member.user_id) === String(user?.id)) &&
+                            member.user_id && (
+                              <button
+                                className="btn-secondary"
+                                onClick={() => handleRemoveMember(member.user_id)}
+                                disabled={
+                                  canChangeRoles &&
+                                  String(member.user_id) === String(user?.id) &&
+                                  member.role === 'owner'
+                                }
+                                style={{
+                                  padding: '0.25rem 0.5rem',
+                                  fontSize: '0.85rem',
+                                  color: 'var(--color-status-error)',
+                                  borderColor: 'var(--color-status-error)',
+                                }}
+                              >
+                                {String(member.user_id) === String(user?.id) ? 'Leave' : 'Remove'}
+                              </button>
+                            )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
-            )}
-          </div>
-          </>
+            </>
           )}
         </div>
       )}
 
-      {canViewAnalytics && !canManageTeam && activeTab !== "analytics" && (
-        <div style={{ marginBottom: "1rem" }} data-no-print>
+      {canViewAnalytics && !canManageTeam && activeTab !== 'analytics' && (
+        <div style={{ marginBottom: '1rem' }} data-no-print>
           <button
             type="button"
             className="btn-secondary"
-            onClick={() => setActiveTab("analytics")}
-            style={{ fontSize: "0.85rem" }}
+            onClick={() => setActiveTab('analytics')}
+            style={{ fontSize: '0.85rem' }}
           >
             View Analytics
           </button>
@@ -1887,42 +1799,40 @@ export default function Campaign() {
         <form
           onSubmit={submitUpdate}
           className="campaign-card"
-          style={{ marginBottom: "1rem" }}
+          style={{ marginBottom: '1rem' }}
           data-no-print
         >
-          <strong style={{ marginBottom: "0.5rem", display: "block" }}>
-            {editingUpdateId ? "Edit update" : "Post update"}
+          <strong style={{ marginBottom: '0.5rem', display: 'block' }}>
+            {editingUpdateId ? 'Edit update' : 'Post update'}
           </strong>
           <input
             placeholder="Update title"
             value={updateForm.title}
-            onChange={(e) =>
-              setUpdateForm((s) => ({ ...s, title: e.target.value }))
-            }
+            onChange={(e) => setUpdateForm((s) => ({ ...s, title: e.target.value }))}
             required
-            style={{ marginBottom: "0.5rem" }}
+            style={{ marginBottom: '0.5rem' }}
           />
           <textarea
             placeholder="Write markdown update..."
             value={updateForm.body}
-            onChange={(e) =>
-              setUpdateForm((s) => ({ ...s, body: e.target.value }))
-            }
+            onChange={(e) => setUpdateForm((s) => ({ ...s, body: e.target.value }))}
             rows={4}
             required
           />
           {updatesError && (
-            <div style={{ color: "var(--color-status-error)", fontSize: "0.85rem", marginTop: "0.5rem" }}>
+            <div
+              style={{
+                color: 'var(--color-status-error)',
+                fontSize: '0.85rem',
+                marginTop: '0.5rem',
+              }}
+            >
               {updatesError}
             </div>
           )}
-          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
-            <button
-              type="submit"
-              className="btn-primary"
-              disabled={updateBusy}
-            >
-              {updateBusy ? "Saving..." : editingUpdateId ? "Save changes" : "Post"}
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+            <button type="submit" className="btn-primary" disabled={updateBusy}>
+              {updateBusy ? 'Saving...' : editingUpdateId ? 'Save changes' : 'Post'}
             </button>
             {editingUpdateId && (
               <button
@@ -1930,8 +1840,8 @@ export default function Campaign() {
                 className="btn-secondary"
                 onClick={() => {
                   setEditingUpdateId(null);
-                  setUpdateForm({ title: "", body: "" });
-                  setUpdatesError("");
+                  setUpdateForm({ title: '', body: '' });
+                  setUpdatesError('');
                 }}
               >
                 Cancel
@@ -1940,74 +1850,59 @@ export default function Campaign() {
           </div>
         </form>
       )}
-          {updates.map((update) => (
-            <article key={update.id} className="campaign-card">
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: "0.5rem",
-                  flexWrap: "wrap",
-                }}
-              >
-                <strong>{update.title}</strong>
-                <span
-                  style={{
-                    color: "var(--color-text-hint)",
-                    fontSize: "0.85rem",
-                  }}
-                >
-                  {update.author_name} •{" "}
-                  <RelativeTime date={update.created_at} />
-                </span>
-              </div>
-              <div
-                style={{
-                  marginTop: "0.5rem",
-                  color: "var(--color-text-primary)",
-                  lineHeight: 1.5,
-                }}
-                dangerouslySetInnerHTML={{
-                  __html: markdownToHtml(update.body),
-                }}
-              />
-            </article>
-          ))}
-
+      {updates.map((update) => (
+        <article key={update.id} className="campaign-card">
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: '0.5rem',
+              flexWrap: 'wrap',
+            }}
+          >
+            <strong>{update.title}</strong>
+            <span
+              style={{
+                color: 'var(--color-text-hint)',
+                fontSize: '0.85rem',
+              }}
+            >
+              {update.author_name} • <RelativeTime date={update.created_at} />
+            </span>
+          </div>
+          <div
+            style={{
+              marginTop: '0.5rem',
+              color: 'var(--color-text-primary)',
+              lineHeight: 1.5,
+            }}
+            dangerouslySetInnerHTML={{
+              __html: markdownToHtml(update.body),
+            }}
+          />
+        </article>
+      ))}
 
       {/* Analytics Section */}
-      {canViewAnalytics && analytics && (canManageTeam ? activeTab === "analytics" : true) && (
-        <div style={{ marginBottom: "2rem" }}>
+      {canViewAnalytics && analytics && (canManageTeam ? activeTab === 'analytics' : true) && (
+        <div style={{ marginBottom: '2rem' }}>
           <h2 style={styles.sectionTitle}>Analytics</h2>
           {!analytics.dailyTotals || analytics.dailyTotals.length === 0 ? (
-            <p style={{ color: "var(--color-text-muted)" }}>
-              No analytics data available yet.
-            </p>
+            <p style={{ color: 'var(--color-text-muted)' }}>No analytics data available yet.</p>
           ) : (
-            <div style={{ display: "grid", gap: "1.5rem" }}>
+            <div style={{ display: 'grid', gap: '1.5rem' }}>
               <div className="campaign-card">
-                <strong style={{ display: "block", marginBottom: "1rem" }}>
+                <strong style={{ display: 'block', marginBottom: '1rem' }}>
                   Contributions (Last 30 Days)
                 </strong>
-                <svg
-                  width="100%"
-                  height={150}
-                  viewBox={`0 0 600 150`}
-                  preserveAspectRatio="none"
-                >
+                <svg width="100%" height={150} viewBox={`0 0 600 150`} preserveAspectRatio="none">
                   {analytics.dailyTotals.map((day, i) => {
                     const maxAmount = Math.max(
-                      ...analytics.dailyTotals.map(
-                        (d) => Number(d.total_amount) || 0,
-                      ),
-                      1,
+                      ...analytics.dailyTotals.map((d) => Number(d.total_amount) || 0),
+                      1
                     );
-                    const barWidth =
-                      600 / Math.max(analytics.dailyTotals.length, 1);
-                    const barHeight = Math.max(
-                      5,
-                      (Number(day.total_amount) / maxAmount) * 150,
-                    );
+                    const barWidth = 600 / Math.max(analytics.dailyTotals.length, 1);
+                    const barHeight = Math.max(5, (Number(day.total_amount) / maxAmount) * 150);
                     const y = 150 - barHeight;
                     const x = i * barWidth;
                     return (
@@ -2028,16 +1923,14 @@ export default function Campaign() {
               </div>
 
               <div className="campaign-card">
-                <strong style={{ display: "block", marginBottom: "1rem" }}>
-                  Asset Breakdown
-                </strong>
+                <strong style={{ display: 'block', marginBottom: '1rem' }}>Asset Breakdown</strong>
                 {analytics.assetBreakdown.map((asset) => (
                   <div
                     key={asset.paid_with}
                     style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      marginBottom: "0.5rem",
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      marginBottom: '0.5rem',
                     }}
                   >
                     <span>{asset.paid_with}</span>
@@ -2047,17 +1940,15 @@ export default function Campaign() {
               </div>
 
               <div className="campaign-card">
-                <strong style={{ display: "block", marginBottom: "1rem" }}>
-                  Top Contributors
-                </strong>
+                <strong style={{ display: 'block', marginBottom: '1rem' }}>Top Contributors</strong>
                 {analytics.topContributors.map((c, i) => (
                   <div
                     key={i}
                     style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      marginBottom: "0.5rem",
-                      fontFamily: "monospace",
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      marginBottom: '0.5rem',
+                      fontFamily: 'monospace',
                     }}
                   >
                     <span>
@@ -2076,27 +1967,38 @@ export default function Campaign() {
       )}
 
       {isOwner && referralLeaderboard && referralLeaderboard.length > 0 && (
-        <div style={{ marginBottom: "2rem" }}>
+        <div style={{ marginBottom: '2rem' }}>
           <h2 style={styles.sectionTitle}>Referral Leaderboard</h2>
           <div className="campaign-card">
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
               <thead>
-                <tr style={{ borderBottom: "2px solid var(--color-border)", textAlign: "left" }}>
-                  <th style={{ padding: "0.5rem 0.75rem" }}>#</th>
-                  <th style={{ padding: "0.5rem 0.75rem" }}>Referrer</th>
-                  <th style={{ padding: "0.5rem 0.75rem", textAlign: "center" }}>Clicks</th>
-                  <th style={{ padding: "0.5rem 0.75rem", textAlign: "center" }}>Contributions</th>
-                  <th style={{ padding: "0.5rem 0.75rem", textAlign: "center" }}>Conv. Rate</th>
+                <tr style={{ borderBottom: '2px solid var(--color-border)', textAlign: 'left' }}>
+                  <th style={{ padding: '0.5rem 0.75rem' }}>#</th>
+                  <th style={{ padding: '0.5rem 0.75rem' }}>Referrer</th>
+                  <th style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>Clicks</th>
+                  <th style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>Contributions</th>
+                  <th style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>Conv. Rate</th>
                 </tr>
               </thead>
               <tbody>
                 {referralLeaderboard.map((r, i) => (
-                  <tr key={r.referral_code} style={{ borderBottom: "1px solid var(--color-border-lighter)" }}>
-                    <td style={{ padding: "0.5rem 0.75rem", color: "var(--color-text-hint)" }}>{i + 1}</td>
-                    <td style={{ padding: "0.5rem 0.75rem", fontWeight: 600 }}>{r.referrer_name}</td>
-                    <td style={{ padding: "0.5rem 0.75rem", textAlign: "center" }}>{r.click_count}</td>
-                    <td style={{ padding: "0.5rem 0.75rem", textAlign: "center" }}>{r.contribution_count}</td>
-                    <td style={{ padding: "0.5rem 0.75rem", textAlign: "center" }}>
+                  <tr
+                    key={r.referral_code}
+                    style={{ borderBottom: '1px solid var(--color-border-lighter)' }}
+                  >
+                    <td style={{ padding: '0.5rem 0.75rem', color: 'var(--color-text-hint)' }}>
+                      {i + 1}
+                    </td>
+                    <td style={{ padding: '0.5rem 0.75rem', fontWeight: 600 }}>
+                      {r.referrer_name}
+                    </td>
+                    <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>
+                      {r.click_count}
+                    </td>
+                    <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>
+                      {r.contribution_count}
+                    </td>
+                    <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>
                       {r.click_count > 0
                         ? `${((r.contribution_count / r.click_count) * 100).toFixed(0)}%`
                         : '-'}
@@ -2110,7 +2012,7 @@ export default function Campaign() {
       )}
 
       <h2 style={styles.sectionTitle}>
-        Backer Wall {contributions !== null ? `(${totalContributions})` : ""}
+        Backer Wall {contributions !== null ? `(${totalContributions})` : ''}
         {isLive && (
           <span style={styles.liveIndicator} title="Live updates active">
             <span style={styles.liveDot} />
@@ -2124,7 +2026,11 @@ export default function Campaign() {
         <div style={styles.emptyBackers}>
           <p>Be the first to back this!</p>
           <p
-            style={{ fontSize: "0.9rem", color: "var(--color-text-secondary)", marginTop: "0.25rem" }}
+            style={{
+              fontSize: '0.9rem',
+              color: 'var(--color-text-secondary)',
+              marginTop: '0.25rem',
+            }}
           >
             Every contribution counts towards making this goal a reality.
           </p>
@@ -2144,159 +2050,12 @@ export default function Campaign() {
                 onClick={() => setShowAll((prev) => !prev)}
                 style={{ padding: '0.5rem 1.5rem', fontSize: '0.9rem', cursor: 'pointer' }}
               >
-                <button
-                  type="submit"
-                  className="btn-primary"
-                  disabled={updateBusy}
-                >
-                  {updateBusy
-                    ? "Saving..."
-                    : editingUpdateId
-                      ? "Save update"
-                      : "Post update"}
-                </button>
-
-                {editingUpdateId && (
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    onClick={cancelUpdateEdit}
-                  >
-                    Cancel
-                  </button>
-                )}
-              </div>
-            </form>
-          )}
-
-          {updates.length === 0 ? (
-            <p
-              style={{ color: "var(--color-text-muted)", marginBottom: "1rem" }}
-            >
-              No updates yet — the creator hasn't posted anything.
-            </p>
-          ) : (
-            <div
-              style={{
-                display: "grid",
-                gap: "0.75rem",
-                marginBottom: "1.25rem",
-              }}
-            >
-              {updates.map((update) => (
-                <article key={update.id} className="campaign-card">
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: "0.5rem",
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <strong>{update.title}</strong>
-                    <span
-                      style={{
-                        color: "var(--color-text-hint)",
-                        fontSize: "0.85rem",
-                      }}
-                    >
-                      {update.author_name} •{" "}
-                      <RelativeTime date={update.created_at} />
-                    </span>
-                  </div>
-
-                  <div
-                    style={{
-                      marginTop: "0.5rem",
-                      color: "var(--color-text-primary)",
-                      lineHeight: 1.5,
-                    }}
-                    dangerouslySetInnerHTML={{
-                      __html: markdownToHtml(update.body),
-                    }}
-                  />
-
-                  {canPostUpdate && (
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "0.5rem",
-                        marginTop: "0.75rem",
-                      }}
-                    >
-                      {canEditUpdate(update) && (
-                        <button
-                          type="button"
-                          className="btn-secondary"
-                          onClick={() => startEditUpdate(update)}
-                          style={{
-                            fontSize: "0.85rem",
-                            padding: "0.4rem 0.75rem",
-                          }}
-                        >
-                          Edit
-                        </button>
-                      )}
-
-
-          <h2 style={styles.sectionTitle}>
-            Backer Wall{" "}
-            {contributions !== null ? `(${totalContributions})` : ""}
-            {isLive && (
-              <span style={styles.liveIndicator} title="Live updates active">
-                <span style={styles.liveDot} />
-                Live
-              </span>
-            )}
-          </h2>
-
-          {contributions === null ? (
-            <ContributionListSkeleton />
-          ) : contributions.length === 0 ? (
-            <div style={styles.emptyBackers}>
-              <p>Be the first to back this!</p>
-              <p
-                style={{
-                  fontSize: "0.9rem",
-                  color: "var(--color-text-secondary)",
-                  marginTop: "0.25rem",
-                }}
-              >
-                Every contribution counts towards making this goal a reality.
-              </p>
-            </div>
-      ) : (
-        <>
-          <div style={styles.list} className="contributions-list">
-            {contributions.map((c) => (
-              <ContributionRow key={c.id} c={c} />
-            ))}
-          </div>
-          {totalContributions > 10 && (
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "center",
-                marginTop: "1rem",
-              }}
-            >
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => setShowAll((prev) => !prev)}
-                style={{
-                  padding: "0.5rem 1.5rem",
-                  fontSize: "0.9rem",
-                  cursor: "pointer",
-                }}
-              >
-                {showAll ? "Show less" : `Show all (${totalContributions})`}
+                {showAll ? 'Show less' : 'Show all'}
               </button>
             </div>
-              )}
-            </>
           )}
-
+        </>
+      )}
 
       {showModal && (
         <ContributeModal
@@ -2323,37 +2082,37 @@ export default function Campaign() {
       {isEditingCampaign && campaign && (
         <div
           style={{
-            position: "fixed",
+            position: 'fixed',
             top: 0,
             left: 0,
             right: 0,
             bottom: 0,
-            background: "rgba(0, 0, 0, 0.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             zIndex: 1000,
           }}
           onClick={handleCloseEditModal}
         >
           <div
             style={{
-              background: "#fff",
-              borderRadius: "12px",
-              padding: "2rem",
-              maxWidth: "500px",
-              width: "90%",
-              maxHeight: "90vh",
-              overflowY: "auto",
-              boxShadow: "0 20px 60px rgba(0, 0, 0, 0.3)",
+              background: '#fff',
+              borderRadius: '12px',
+              padding: '2rem',
+              maxWidth: '500px',
+              width: '90%',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
             <h2
               style={{
                 marginTop: 0,
-                marginBottom: "1.5rem",
-                fontSize: "1.5rem",
+                marginBottom: '1.5rem',
+                fontSize: '1.5rem',
               }}
             >
               Edit Campaign
@@ -2362,23 +2121,23 @@ export default function Campaign() {
             {editError && (
               <p
                 style={{
-                  color: "#d32f2f",
-                  marginBottom: "1rem",
-                  padding: "0.75rem",
-                  background: "#ffebee",
-                  borderRadius: "6px",
+                  color: '#d32f2f',
+                  marginBottom: '1rem',
+                  padding: '0.75rem',
+                  background: '#ffebee',
+                  borderRadius: '6px',
                 }}
               >
                 {editError}
               </p>
             )}
 
-            <div style={{ marginBottom: "1.5rem" }}>
+            <div style={{ marginBottom: '1.5rem' }}>
               <label
                 style={{
-                  display: "block",
+                  display: 'block',
                   fontWeight: 600,
-                  marginBottom: "0.5rem",
+                  marginBottom: '0.5rem',
                 }}
               >
                 Title
@@ -2386,36 +2145,34 @@ export default function Campaign() {
               <input
                 type="text"
                 value={editFormData.title}
-                onChange={(e) =>
-                  setEditFormData({ ...editFormData, title: e.target.value })
-                }
+                onChange={(e) => setEditFormData({ ...editFormData, title: e.target.value })}
                 maxLength={100}
                 style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #ddd",
-                  borderRadius: "6px",
-                  fontSize: "1rem",
-                  boxSizing: "border-box",
+                  width: '100%',
+                  padding: '0.75rem',
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  fontSize: '1rem',
+                  boxSizing: 'border-box',
                 }}
               />
               <p
                 style={{
-                  fontSize: "0.85rem",
-                  color: "#888",
-                  margin: "0.25rem 0 0",
+                  fontSize: '0.85rem',
+                  color: '#888',
+                  margin: '0.25rem 0 0',
                 }}
               >
                 {editFormData.title.length}/100
               </p>
             </div>
 
-            <div style={{ marginBottom: "1.5rem" }}>
+            <div style={{ marginBottom: '1.5rem' }}>
               <label
                 style={{
-                  display: "block",
+                  display: 'block',
                   fontWeight: 600,
-                  marginBottom: "0.5rem",
+                  marginBottom: '0.5rem',
                 }}
               >
                 Description
@@ -2431,32 +2188,32 @@ export default function Campaign() {
                 maxLength={1000}
                 rows={5}
                 style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #ddd",
-                  borderRadius: "6px",
-                  fontSize: "1rem",
-                  fontFamily: "inherit",
-                  boxSizing: "border-box",
+                  width: '100%',
+                  padding: '0.75rem',
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  fontSize: '1rem',
+                  fontFamily: 'inherit',
+                  boxSizing: 'border-box',
                 }}
               />
               <p
                 style={{
-                  fontSize: "0.85rem",
-                  color: "#888",
-                  margin: "0.25rem 0 0",
+                  fontSize: '0.85rem',
+                  color: '#888',
+                  margin: '0.25rem 0 0',
                 }}
               >
                 {editFormData.description.length}/1000
               </p>
             </div>
 
-            <div style={{ marginBottom: "1.5rem" }}>
+            <div style={{ marginBottom: '1.5rem' }}>
               <label
                 style={{
-                  display: "block",
+                  display: 'block',
                   fontWeight: 600,
-                  marginBottom: "0.5rem",
+                  marginBottom: '0.5rem',
                 }}
               >
                 Deadline (optional)
@@ -2464,25 +2221,23 @@ export default function Campaign() {
               <input
                 type="date"
                 value={editFormData.deadline}
-                onChange={(e) =>
-                  setEditFormData({ ...editFormData, deadline: e.target.value })
-                }
+                onChange={(e) => setEditFormData({ ...editFormData, deadline: e.target.value })}
                 style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #ddd",
-                  borderRadius: "6px",
-                  fontSize: "1rem",
-                  boxSizing: "border-box",
+                  width: '100%',
+                  padding: '0.75rem',
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  fontSize: '1rem',
+                  boxSizing: 'border-box',
                 }}
               />
             </div>
 
             <div
               style={{
-                display: "flex",
-                gap: "1rem",
-                justifyContent: "flex-end",
+                display: 'flex',
+                gap: '1rem',
+                justifyContent: 'flex-end',
               }}
             >
               <button
@@ -2501,7 +2256,7 @@ export default function Campaign() {
                 disabled={editLoading}
                 style={{ opacity: editLoading ? 0.6 : 1 }}
               >
-                {editLoading ? "Saving..." : "Save Changes"}
+                {editLoading ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
           </div>
@@ -2512,59 +2267,58 @@ export default function Campaign() {
       {showDeleteDialog && campaign && (
         <div
           style={{
-            position: "fixed",
+            position: 'fixed',
             top: 0,
             left: 0,
             right: 0,
             bottom: 0,
-            background: "rgba(0, 0, 0, 0.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             zIndex: 1000,
           }}
         >
           <div
             style={{
-              background: "var(--color-surface)",
-              borderRadius: "8px",
-              padding: "2rem",
-              maxWidth: "500px",
-              width: "90%",
-              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+              background: 'var(--color-surface)',
+              borderRadius: '8px',
+              padding: '2rem',
+              maxWidth: '500px',
+              width: '90%',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
             }}
           >
             <h2
               style={{
-                fontSize: "1.5rem",
+                fontSize: '1.5rem',
                 fontWeight: 700,
-                marginBottom: "1rem",
-                color: "var(--color-text-primary)",
+                marginBottom: '1rem',
+                color: 'var(--color-text-primary)',
               }}
             >
               Delete Campaign
             </h2>
             <p
               style={{
-                fontSize: "0.95rem",
-                color: "var(--color-text-secondary)",
-                marginBottom: "1.5rem",
+                fontSize: '0.95rem',
+                color: 'var(--color-text-secondary)',
+                marginBottom: '1.5rem',
                 lineHeight: 1.5,
               }}
             >
-              Are you sure you want to delete this campaign? This action cannot
-              be undone. All contribution and withdrawal history will be
-              preserved, but the campaign will no longer be visible to the
-              public.
+              Are you sure you want to delete this campaign? This action cannot be undone. All
+              contribution and withdrawal history will be preserved, but the campaign will no longer
+              be visible to the public.
             </p>
-            <div style={{ marginBottom: "1.5rem" }}>
+            <div style={{ marginBottom: '1.5rem' }}>
               <label
                 style={{
-                  display: "block",
+                  display: 'block',
                   fontWeight: 600,
-                  marginBottom: "0.5rem",
-                  fontSize: "0.9rem",
-                  color: "var(--color-text-primary)",
+                  marginBottom: '0.5rem',
+                  fontSize: '0.9rem',
+                  color: 'var(--color-text-primary)',
                 }}
               >
                 Type the campaign title to confirm:
@@ -2575,28 +2329,25 @@ export default function Campaign() {
                 onChange={(e) => setDeleteConfirmation(e.target.value)}
                 placeholder={campaign.title}
                 style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid var(--color-border)",
-                  borderRadius: "4px",
-                  fontSize: "1rem",
-                  boxSizing: "border-box",
+                  width: '100%',
+                  padding: '0.75rem',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: '4px',
+                  fontSize: '1rem',
+                  boxSizing: 'border-box',
                 }}
               />
             </div>
             {deleteError && (
-              <p
-                className="alert alert--error"
-                style={{ marginBottom: "1.5rem" }}
-              >
+              <p className="alert alert--error" style={{ marginBottom: '1.5rem' }}>
                 {deleteError}
               </p>
             )}
             <div
               style={{
-                display: "flex",
-                gap: "1rem",
-                justifyContent: "flex-end",
+                display: 'flex',
+                gap: '1rem',
+                justifyContent: 'flex-end',
               }}
             >
               <button
@@ -2604,8 +2355,8 @@ export default function Campaign() {
                 className="btn-secondary"
                 onClick={() => {
                   setShowDeleteDialog(false);
-                  setDeleteConfirmation("");
-                  setDeleteError("");
+                  setDeleteConfirmation('');
+                  setDeleteError('');
                 }}
                 disabled={deleteLoading}
                 style={{ opacity: deleteLoading ? 0.6 : 1 }}
@@ -2616,19 +2367,14 @@ export default function Campaign() {
                 type="button"
                 className="btn-primary"
                 onClick={handleDeleteCampaign}
-                disabled={
-                  deleteLoading || deleteConfirmation !== campaign.title
-                }
+                disabled={deleteLoading || deleteConfirmation !== campaign.title}
                 style={{
-                  opacity:
-                    deleteLoading || deleteConfirmation !== campaign.title
-                      ? 0.6
-                      : 1,
-                  background: "#dc2626",
-                  borderColor: "#dc2626",
+                  opacity: deleteLoading || deleteConfirmation !== campaign.title ? 0.6 : 1,
+                  background: '#dc2626',
+                  borderColor: '#dc2626',
                 }}
               >
-                {deleteLoading ? "Deleting..." : "Delete Campaign"}
+                {deleteLoading ? 'Deleting...' : 'Delete Campaign'}
               </button>
             </div>
           </div>
@@ -2639,323 +2385,126 @@ export default function Campaign() {
 }
 
 const styles = {
-  header: { marginBottom: "1.5rem" },
+  header: { marginBottom: '1.5rem' },
   badgeRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.5rem",
-    flexWrap: "wrap",
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    flexWrap: 'wrap',
   },
   asset: {
-    background: "#ede9fe",
-    color: "#7c3aed",
-    fontSize: "0.75rem",
+    background: '#ede9fe',
+    color: '#7c3aed',
+    fontSize: '0.75rem',
     fontWeight: 700,
-    padding: "2px 8px",
-    borderRadius: "99px",
+    padding: '2px 8px',
+    borderRadius: '99px',
   },
   title: {
-    fontSize: "1.8rem",
+    fontSize: '1.8rem',
     fontWeight: 800,
-    margin: "0.5rem 0",
-    color: "#111",
+    margin: '0.5rem 0',
+    color: '#111',
   },
-  creator: { color: "#666", fontSize: "0.9rem", marginBottom: "0.5rem" },
-  desc: { color: "#555", fontSize: "1rem", lineHeight: 1.6 },
+  creator: { color: '#666', fontSize: '0.9rem', marginBottom: '0.5rem' },
+  desc: { color: '#555', fontSize: '1rem', lineHeight: 1.6 },
   card: {
-    background: "#fff",
-    border: "1px solid #e5e5e5",
-    borderRadius: "10px",
-    padding: "1.5rem",
-    marginBottom: "1rem",
+    background: '#fff',
+    border: '1px solid #e5e5e5',
+    borderRadius: '10px',
+    padding: '1.5rem',
+    marginBottom: '1rem',
   },
   amounts: {
-    display: "flex",
-    justifyContent: "space-between",
-    marginBottom: "1rem",
+    display: 'flex',
+    justifyContent: 'space-between',
+    marginBottom: '1rem',
   },
-  big: { fontSize: "1.5rem", fontWeight: 800, color: "#111" },
-  small: { fontSize: "0.85rem", color: "#888" },
+  big: { fontSize: '1.5rem', fontWeight: 800, color: '#111' },
+  small: { fontSize: '0.85rem', color: '#888' },
   bar: {
-    background: "#f0f0f0",
-    borderRadius: "99px",
-    height: "8px",
-    marginBottom: "1.25rem",
-    overflow: "hidden",
+    background: '#f0f0f0',
+    borderRadius: '99px',
+    height: '8px',
+    marginBottom: '1.25rem',
+    overflow: 'hidden',
   },
-  fill: { background: "#7c3aed", height: "100%", borderRadius: "99px" },
-  cta: { width: "100%", padding: "0.85rem", fontSize: "1rem" },
+  fill: { background: '#7c3aed', height: '100%', borderRadius: '99px' },
+  cta: { width: '100%', padding: '0.85rem', fontSize: '1rem' },
   walletInfo: {
-    background: "#f8f8f8",
-    borderRadius: "8px",
-    padding: "0.75rem 1rem",
-    marginBottom: "1.75rem",
-    display: "flex",
-    flexDirection: "column",
-    gap: "0.25rem",
+    background: '#f8f8f8',
+    borderRadius: '8px',
+    padding: '0.75rem 1rem',
+    marginBottom: '1.75rem',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.25rem',
   },
   walletLabel: {
-    fontSize: "0.75rem",
+    fontSize: '0.75rem',
     fontWeight: 600,
-    color: "#888",
-    textTransform: "uppercase",
+    color: '#888',
+    textTransform: 'uppercase',
   },
-  walletKey: { fontSize: "0.8rem", color: "#555", wordBreak: "break-all" },
+  walletKey: { fontSize: '0.8rem', color: '#555', wordBreak: 'break-all' },
   detailCoverImage: {
-    width: "100%",
-    borderRadius: "14px",
-    marginBottom: "1.5rem",
-    objectFit: "cover",
-    maxHeight: "360px",
+    width: '100%',
+    borderRadius: '14px',
+    marginBottom: '1.5rem',
+    objectFit: 'cover',
+    maxHeight: '360px',
   },
   detailCoverPlaceholder: {
-    width: "100%",
-    borderRadius: "14px",
-    marginBottom: "1.5rem",
-    height: "260px",
-    background: "linear-gradient(135deg, #ede9fe 0%, #e0e7ff 100%)",
-    border: "1px solid #ddd6fe",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
+    width: '100%',
+    borderRadius: '14px',
+    marginBottom: '1.5rem',
+    height: '260px',
+    background: 'linear-gradient(135deg, #ede9fe 0%, #e0e7ff 100%)',
+    border: '1px solid #ddd6fe',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  detailCoverPlaceholderText: { color: "#6d28d9", fontWeight: 700 },
+  detailCoverPlaceholderText: { color: '#6d28d9', fontWeight: 700 },
   sectionTitle: {
-    fontSize: "1.1rem",
+    fontSize: '1.1rem',
     fontWeight: 700,
-    marginBottom: "0.75rem",
+    marginBottom: '0.75rem',
   },
-  list: { display: "flex", flexDirection: "column", gap: "0.5rem" },
+  list: { display: 'flex', flexDirection: 'column', gap: '0.5rem' },
   row: {
-    display: "flex",
-    justifyContent: "space-between",
-    background: "#fff",
-    border: "1px solid #eee",
-    borderRadius: "6px",
-    padding: "0.6rem 0.85rem",
+    display: 'flex',
+    justifyContent: 'space-between',
+    background: '#fff',
+    border: '1px solid #eee',
+    borderRadius: '6px',
+    padding: '0.6rem 0.85rem',
   },
-  sender: { fontSize: "0.85rem", color: "#555", fontFamily: "monospace" },
-  amount: { fontSize: "0.85rem", fontWeight: 600, flexShrink: 0 },
-  convHint: { fontSize: "0.72rem", color: "#888", marginTop: "0.15rem" },
+  sender: { fontSize: '0.85rem', color: '#555', fontFamily: 'monospace' },
+  amount: { fontSize: '0.85rem', fontWeight: 600, flexShrink: 0 },
+  convHint: { fontSize: '0.72rem', color: '#888', marginTop: '0.15rem' },
   refundTag: {
-    marginTop: "0.45rem",
-    fontSize: "0.75rem",
-    color: "#7c3aed",
+    marginTop: '0.45rem',
+    fontSize: '0.75rem',
+    color: '#7c3aed',
     fontWeight: 700,
   },
   liveIndicator: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "4px",
-    marginLeft: "0.5rem",
-    fontSize: "0.72rem",
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '4px',
+    marginLeft: '0.5rem',
+    fontSize: '0.72rem',
     fontWeight: 600,
-    color: "#16a34a",
-    verticalAlign: "middle",
+    color: '#16a34a',
+    verticalAlign: 'middle',
   },
   liveDot: {
-    display: "inline-block",
-    width: "7px",
-    height: "7px",
-    borderRadius: "50%",
-    background: "#16a34a",
-    animation: "pulse 1.5s ease-in-out infinite",
-  },
-  header: { marginBottom: "1.5rem" },
-  badgeRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.5rem",
-    flexWrap: "wrap",
-  },
-  asset: {
-    background: "var(--color-accent-lightest)",
-    color: "var(--color-accent)",
-    fontSize: "0.75rem",
-    fontWeight: 700,
-    padding: "2px 8px",
-    borderRadius: "99px",
-  },
-  title: {
-    fontSize: "1.8rem",
-    fontWeight: 800,
-    margin: "0.5rem 0",
-    color: "var(--color-text-primary)",
-  },
-  creator: {
-    color: "var(--color-text-hint)",
-    fontSize: "0.9rem",
-    marginBottom: "0.5rem",
-  },
-  desc: {
-    color: "var(--color-text-secondary)",
-    fontSize: "1rem",
-    lineHeight: 1.6,
-  },
-  card: {
-    background: "var(--color-bg)",
-    border: "1px solid var(--color-border-light)",
-    borderRadius: "10px",
-    padding: "1.5rem",
-    marginBottom: "1rem",
-  },
-  amounts: {
-    display: "flex",
-    justifyContent: "space-between",
-    marginBottom: "1rem",
-  },
-  big: {
-    fontSize: "1.5rem",
-    fontWeight: 800,
-    color: "var(--color-text-primary)",
-  },
-  small: { fontSize: "0.85rem", color: "var(--color-text-secondary)" },
-  bar: {
-    background: "var(--color-surface)",
-    borderRadius: "99px",
-    height: "8px",
-    marginBottom: "1.25rem",
-    overflow: "hidden",
-  },
-  fill: {
-    background: "var(--color-accent)",
-    height: "100%",
-    borderRadius: "99px",
-  },
-  cta: { width: "100%", padding: "0.85rem", fontSize: "1rem" },
-  walletInfo: {
-    background: "var(--color-surface)",
-    borderRadius: "8px",
-    padding: "0.75rem 1rem",
-    marginBottom: "1.75rem",
-    display: "flex",
-    flexDirection: "column",
-    gap: "0.25rem",
-  },
-  walletLabel: {
-    fontSize: "0.75rem",
-    fontWeight: 600,
-    color: "var(--color-text-secondary)",
-    textTransform: "uppercase",
-  },
-  walletKey: {
-    fontSize: "0.8rem",
-    color: "var(--color-text-hint)",
-    wordBreak: "break-all",
-  },
-  detailCoverImage: {
-    width: "100%",
-    borderRadius: "14px",
-    marginBottom: "1.5rem",
-    objectFit: "cover",
-    maxHeight: "360px",
-  },
-  sectionTitle: {
-    fontSize: "1.1rem",
-    fontWeight: 700,
-    marginBottom: "0.75rem",
-  },
-  list: { display: "flex", flexDirection: "column", gap: "0.5rem" },
-  row: {
-    display: "flex",
-    justifyContent: "space-between",
-    background: "var(--color-bg)",
-    border: "1px solid var(--color-border-lighter)",
-    borderRadius: "6px",
-    padding: "0.6rem 0.85rem",
-  },
-  sender: {
-    fontSize: "0.85rem",
-    color: "var(--color-text-secondary)",
-    fontFamily: "monospace",
-  },
-  amount: { fontSize: "0.85rem", fontWeight: 600, flexShrink: 0 },
-  convHint: {
-    fontSize: "0.72rem",
-    color: "var(--color-text-secondary)",
-    marginTop: "0.15rem",
-  },
-  refundTag: {
-    marginTop: "0.45rem",
-    fontSize: "0.75rem",
-    color: "var(--color-accent)",
-    fontWeight: 700,
-  },
-  liveIndicator: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "4px",
-    marginLeft: "0.5rem",
-    fontSize: "0.72rem",
-    fontWeight: 600,
-    color: "var(--color-success-text)",
-    verticalAlign: "middle",
-  },
-  liveDot: {
-    display: "inline-block",
-    width: "7px",
-    height: "7px",
-    borderRadius: "50%",
-    background: "var(--color-success-text)",
-    animation: "pulse 1.5s ease-in-out infinite",
-  },
-  embedCode: {
-    background: "var(--color-surface)",
-    border: "1px solid var(--color-border-light)",
-    borderRadius: "6px",
-    padding: "0.75rem",
-    fontSize: "0.75rem",
-    fontFamily: "monospace",
-    color: "var(--color-text-primary)",
-    overflow: "auto",
-    whiteSpace: "pre-wrap",
-    wordBreak: "break-all",
-    paddingRight: "5rem",
-  },
-  embedSummary: {
-    cursor: "pointer",
-    fontSize: "0.85rem",
-    color: "var(--color-accent)",
-    fontWeight: 600,
-  },
-  embedPreview: {
-    background: "var(--color-surface)",
-    border: "1px solid var(--color-border-light)",
-    borderRadius: "6px",
-    padding: "0.75rem",
-  },
-  emptyBackers: {
-    padding: "2.5rem 1rem",
-    textAlign: "center",
-    background: "var(--color-accent-lightest)",
-    border: "2px dashed var(--color-accent-lighter)",
-    borderRadius: "12px",
-    color: "var(--color-accent)",
-    fontWeight: 700,
-  },
-  avatar: {
-    width: "36px",
-    height: "36px",
-    borderRadius: "50%",
-    background: "var(--color-accent-lightest)",
-    color: "var(--color-accent)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: "0.9rem",
-    fontWeight: 800,
-    flexShrink: 0,
-  },
-  tabs: {
-    display: "flex",
-    gap: "0.75rem",
-    marginBottom: "1rem",
-    borderBottom: "1px solid var(--color-border-light)",
-    paddingBottom: "0.75rem",
-  },
-  tabButton: {
-    flex: 1,
-    fontSize: "0.9rem",
-    justifyContent: "center",
+    display: 'inline-block',
+    width: '7px',
+    height: '7px',
+    borderRadius: '50%',
+    background: '#16a34a',
+    animation: 'pulse 1.5s ease-in-out infinite',
   },
 };

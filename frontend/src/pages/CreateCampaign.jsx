@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import SimpleMDE from 'react-simplemde-editor';
@@ -7,10 +7,7 @@ import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import OnboardingCallout from '../components/OnboardingCallout';
 import KycPrompt from '../components/KycPrompt';
-import {
-  isCreatorOnboardingVisible,
-  dismissCreatorOnboarding,
-} from '../lib/onboarding';
+import { isCreatorOnboardingVisible, dismissCreatorOnboarding } from '../lib/onboarding';
 
 const ASSETS = [
   {
@@ -26,15 +23,15 @@ const ASSETS = [
 ];
 
 const CATEGORIES = [
-  { value: 'technology',  label: 'Technology' },
-  { value: 'community',   label: 'Community' },
-  { value: 'arts',        label: 'Arts & Culture' },
-  { value: 'education',   label: 'Education' },
+  { value: 'technology', label: 'Technology' },
+  { value: 'community', label: 'Community' },
+  { value: 'arts', label: 'Arts & Culture' },
+  { value: 'education', label: 'Education' },
   { value: 'environment', label: 'Environment' },
-  { value: 'health',      label: 'Health' },
-  { value: 'business',    label: 'Business' },
+  { value: 'health', label: 'Health' },
+  { value: 'business', label: 'Business' },
   { value: 'open_source', label: 'Open Source' },
-  { value: 'other',       label: 'Other' },
+  { value: 'other', label: 'Other' },
 ];
 function emptyMilestone() {
   return { title: '', description: '', release_percentage: '' };
@@ -45,7 +42,10 @@ function emptyTier() {
 }
 
 function milestonePercentTotal(milestones) {
-  return milestones.reduce((sum, milestone) => sum + (Number(milestone.release_percentage) || 0), 0);
+  return milestones.reduce(
+    (sum, milestone) => sum + (Number(milestone.release_percentage) || 0),
+    0
+  );
 }
 
 export default function CreateCampaign() {
@@ -53,6 +53,7 @@ export default function CreateCampaign() {
   const { user, ready, updateUser } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const token = localStorage.getItem('cp_token');
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
     title: location.state?.prefill?.title || '',
@@ -62,13 +63,9 @@ export default function CreateCampaign() {
     deadline: '',
     min_contribution: location.state?.prefill?.min_contribution || '',
     max_contribution: location.state?.prefill?.max_contribution || '',
+    max_per_user: '',
     show_backer_amounts: location.state?.prefill?.show_backer_amounts ?? true,
     milestones: [],
-    reward_tiers: [],
-    min_contribution: '',
-    max_contribution: '',
-    max_per_user: '',
-    show_backer_amounts: true,
     category: '',
   });
   const [coverImageFile, setCoverImageFile] = useState(null);
@@ -87,7 +84,10 @@ export default function CreateCampaign() {
 
   useEffect(() => {
     if (!user) return;
-    api.getMe().then(updateUser).catch(() => {});
+    api
+      .getMe()
+      .then(updateUser)
+      .catch(() => {});
   }, [user, updateUser]);
 
   function setField(field) {
@@ -312,43 +312,32 @@ export default function CreateCampaign() {
     setLoading(true);
     setError('');
     try {
-      const campaign = await api.createCampaign(
-        {
-          title: form.title.trim(),
-          description: form.description.trim() || undefined,
-          target_amount: form.target_amount,
-          asset_type: form.asset_type,
-          deadline: form.deadline || undefined,
-          category: form.category || undefined,
-          min_contribution: form.min_contribution ? Number(form.min_contribution) : undefined,
-          max_contribution: form.max_contribution ? Number(form.max_contribution) : undefined,
-          max_per_user: form.max_per_user ? Number(form.max_per_user) : undefined,
-          milestones: form.milestones.length
-            ? form.milestones.map((milestone) => ({
-                title: milestone.title.trim(),
-                description: milestone.description.trim(),
-                release_percentage: Number(milestone.release_percentage),
-              }))
-            : undefined,
-          reward_tiers: form.reward_tiers.length
-            ? form.reward_tiers.map((tier) => ({
-                title: tier.title.trim(),
-                description: tier.description.trim() || undefined,
-                min_amount: Number(tier.min_amount),
-                asset_type: form.asset_type,
-                limit: tier.limit ? Number(tier.limit) : null,
-                estimated_delivery: tier.estimated_delivery || null,
-              }))
-            : undefined,
-        }
-      );
+      const campaign = await api.createCampaign({
+        title: form.title.trim(),
+        description: form.description.trim() || undefined,
+        target_amount: form.target_amount,
+        asset_type: form.asset_type,
+        deadline: form.deadline || undefined,
+        category: form.category || undefined,
+        min_contribution: form.min_contribution ? Number(form.min_contribution) : undefined,
+        max_contribution: form.max_contribution ? Number(form.max_contribution) : undefined,
+        max_per_user: form.max_per_user ? Number(form.max_per_user) : undefined,
+        milestones: form.milestones.length
+          ? form.milestones.map((milestone) => ({
+              title: milestone.title.trim(),
+              description: milestone.description.trim(),
+              release_percentage: Number(milestone.release_percentage),
+            }))
+          : undefined,
+      });
 
       let coverUploadError = '';
       if (coverImageFile) {
         try {
           await api.uploadCampaignCoverImage(campaign.id, coverImageFile);
         } catch (uploadError) {
-          coverUploadError = uploadError.message || 'Campaign created, but cover image upload failed.';
+          coverUploadError =
+            uploadError.message || 'Campaign created, but cover image upload failed.';
         }
       }
 
@@ -390,9 +379,9 @@ export default function CreateCampaign() {
     );
   }
 
-  const kycRequired = user?.kyc_required_for_campaigns ?? (
-    String(import.meta.env.VITE_KYC_REQUIRED_FOR_CAMPAIGNS ?? 'true').toLowerCase() !== 'false'
-  );
+  const kycRequired =
+    user?.kyc_required_for_campaigns ??
+    String(import.meta.env.VITE_KYC_REQUIRED_FOR_CAMPAIGNS ?? 'true').toLowerCase() !== 'false';
 
   if (kycRequired && user?.kyc_status !== 'verified') {
     return (
@@ -422,19 +411,36 @@ export default function CreateCampaign() {
           }}
         >
           <li aria-current={step === 1 ? 'step' : undefined}>
-            <span style={{ color: step === 1 ? '#7c3aed' : '#999' }}>{t('createCampaign.steps.goalAsset')}</span>
+            <span style={{ color: step === 1 ? '#7c3aed' : '#999' }}>
+              {t('createCampaign.steps.goalAsset')}
+            </span>
           </li>
           <li aria-hidden="true">→</li>
           <li aria-current={step === 2 ? 'step' : undefined}>
-            <span style={{ color: step === 2 ? '#7c3aed' : '#999' }}>{t('createCampaign.steps.detailsLaunch')}</span>
+            <span style={{ color: step === 2 ? '#7c3aed' : '#999' }}>
+              {t('createCampaign.steps.detailsLaunch')}
+            </span>
           </li>
         </ol>
       </nav>
 
-      <h1 style={{ fontSize: 'clamp(1.5rem, 4vw, 1.85rem)', fontWeight: 800, marginBottom: '0.35rem' }}>
+      <h1
+        style={{
+          fontSize: 'clamp(1.5rem, 4vw, 1.85rem)',
+          fontWeight: 800,
+          marginBottom: '0.35rem',
+        }}
+      >
         {t('createCampaign.title')}
       </h1>
-      <p style={{ color: 'var(--color-text-secondary)', marginBottom: '1.25rem', fontSize: '0.95rem', lineHeight: 1.55 }}>
+      <p
+        style={{
+          color: 'var(--color-text-secondary)',
+          marginBottom: '1.25rem',
+          fontSize: '0.95rem',
+          lineHeight: 1.55,
+        }}
+      >
         {t('createCampaign.subtitle')}
       </p>
 
@@ -489,11 +495,22 @@ export default function CreateCampaign() {
               />
             </div>
 
-            <div style={{ marginTop: '1.25rem', border: '1px dashed var(--color-border)', padding: '1rem', borderRadius: '8px' }}>
-              <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.5rem' }}>{t('createCampaign.contributionLimits')}</h3>
+            <div
+              style={{
+                marginTop: '1.25rem',
+                border: '1px dashed var(--color-border)',
+                padding: '1rem',
+                borderRadius: '8px',
+              }}
+            >
+              <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+                {t('createCampaign.contributionLimits')}
+              </h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                 <div className="form-stack">
-                  <label className="label-strong" htmlFor="cc-min-contrib">{t('createCampaign.minContribution')}</label>
+                  <label className="label-strong" htmlFor="cc-min-contrib">
+                    {t('createCampaign.minContribution')}
+                  </label>
                   <input
                     id="cc-min-contrib"
                     type="number"
@@ -506,7 +523,9 @@ export default function CreateCampaign() {
                   />
                 </div>
                 <div className="form-stack">
-                  <label className="label-strong" htmlFor="cc-max-contrib">{t('createCampaign.maxContribution')}</label>
+                  <label className="label-strong" htmlFor="cc-max-contrib">
+                    {t('createCampaign.maxContribution')}
+                  </label>
                   <input
                     id="cc-max-contrib"
                     type="number"
@@ -525,7 +544,13 @@ export default function CreateCampaign() {
               <legend className="label-strong" style={{ marginBottom: '0.5rem' }}>
                 {t('createCampaign.settlementAsset')}
               </legend>
-              <p style={{ fontSize: '0.8rem', color: 'var(--color-text-hint)', marginBottom: '0.65rem' }}>
+              <p
+                style={{
+                  fontSize: '0.8rem',
+                  color: 'var(--color-text-hint)',
+                  marginBottom: '0.65rem',
+                }}
+              >
                 {t('createCampaign.settlementAssetHelp')}
               </p>
               <div className="asset-picker" role="radiogroup" aria-label="Settlement asset">
@@ -550,12 +575,17 @@ export default function CreateCampaign() {
 
             <div className="form-stack" style={{ marginTop: '1rem' }}>
               <label className="label-strong" htmlFor="cc-category">
-                Category <span style={{ fontWeight: 500, color: 'var(--color-text-muted)' }}>(optional)</span>
+                Category{' '}
+                <span style={{ fontWeight: 500, color: 'var(--color-text-muted)' }}>
+                  (optional)
+                </span>
               </label>
               <select id="cc-category" value={form.category} onChange={setField('category')}>
                 <option value="">Select a category</option>
                 {CATEGORIES.map((c) => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
                 ))}
               </select>
             </div>
@@ -618,19 +648,28 @@ export default function CreateCampaign() {
             </div>
             <div className="form-stack">
               <label className="label-strong" htmlFor="cc-desc">
-                {t('createCampaign.description')} <span style={{ fontWeight: 500, color: 'var(--color-text-muted)' }}>{t('createCampaign.optional')}</span>
+                {t('createCampaign.description')}{' '}
+                <span style={{ fontWeight: 500, color: 'var(--color-text-muted)' }}>
+                  {t('createCampaign.optional')}
+                </span>
               </label>
-                <SimpleMDE
-                  id="cc-desc"
-                  value={form.description}
-                  onChange={setDescription}
-                options={{ spellChecker: false, placeholder: t('createCampaign.descriptionPlaceholder') }}
+              <SimpleMDE
+                id="cc-desc"
+                value={form.description}
+                onChange={setDescription}
+                options={{
+                  spellChecker: false,
+                  placeholder: t('createCampaign.descriptionPlaceholder'),
+                }}
               />
             </div>
 
             <div className="form-stack" style={{ marginTop: '1rem' }}>
               <label className="label-strong" htmlFor="cc-cover">
-                {t('createCampaign.coverImage')} <span style={{ fontWeight: 500, color: 'var(--color-text-muted)' }}>{t('createCampaign.optional')}</span>
+                {t('createCampaign.coverImage')}{' '}
+                <span style={{ fontWeight: 500, color: 'var(--color-text-muted)' }}>
+                  {t('createCampaign.optional')}
+                </span>
               </label>
               <div
                 onDragOver={(e) => {
@@ -652,7 +691,14 @@ export default function CreateCampaign() {
                   accept="image/jpeg,image/png,image/webp"
                   onChange={handleCoverImageChange}
                 />
-                <p style={{ marginTop: '0.45rem', marginBottom: 0, color: '#666', fontSize: '0.8rem' }}>
+                <p
+                  style={{
+                    marginTop: '0.45rem',
+                    marginBottom: 0,
+                    color: '#666',
+                    fontSize: '0.8rem',
+                  }}
+                >
                   {t('createCampaign.coverImageHelp')}
                 </p>
               </div>
@@ -660,19 +706,42 @@ export default function CreateCampaign() {
                 <img
                   src={coverImagePreview}
                   alt="Cover preview"
-                  style={{ marginTop: '0.75rem', width: '100%', borderRadius: '12px', maxHeight: '220px', objectFit: 'cover' }}
+                  style={{
+                    marginTop: '0.75rem',
+                    width: '100%',
+                    borderRadius: '12px',
+                    maxHeight: '220px',
+                    objectFit: 'cover',
+                  }}
                 />
               )}
             </div>
 
             <div className="form-stack" style={{ marginTop: '1rem' }}>
               <label className="label-strong" htmlFor="cc-deadline">
-                {t('createCampaign.deadline')} <span style={{ fontWeight: 500, color: 'var(--color-text-muted)' }}>{t('createCampaign.optional')}</span>
+                {t('createCampaign.deadline')}{' '}
+                <span style={{ fontWeight: 500, color: 'var(--color-text-muted)' }}>
+                  {t('createCampaign.optional')}
+                </span>
               </label>
-              <input id="cc-deadline" type="date" min={today} value={form.deadline} onChange={setField('deadline')} />
+              <input
+                id="cc-deadline"
+                type="date"
+                min={today}
+                value={form.deadline}
+                onChange={setField('deadline')}
+              />
             </div>
 
-            <div className="form-stack" style={{ marginTop: '1.25rem', flexDirection: 'row', alignItems: 'center', gap: '0.5rem' }}>
+            <div
+              className="form-stack"
+              style={{
+                marginTop: '1.25rem',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: '0.5rem',
+              }}
+            >
               <input
                 id="cc-show-backers"
                 type="checkbox"
@@ -680,11 +749,16 @@ export default function CreateCampaign() {
                 checked={form.show_backer_amounts}
                 onChange={(e) => setForm((f) => ({ ...f, show_backer_amounts: e.target.checked }))}
               />
-              <label htmlFor="cc-show-backers" style={{ fontWeight: 600, fontSize: '0.9rem', cursor: 'pointer' }}>
+              <label
+                htmlFor="cc-show-backers"
+                style={{ fontWeight: 600, fontSize: '0.9rem', cursor: 'pointer' }}
+              >
                 {t('createCampaign.showAmounts')}
               </label>
             </div>
-            <p style={{ fontSize: '0.8rem', color: 'var(--color-text-hint)', marginTop: '0.35rem' }}>
+            <p
+              style={{ fontSize: '0.8rem', color: 'var(--color-text-hint)', marginTop: '0.35rem' }}
+            >
               {t('createCampaign.showAmountsHelp')}
             </p>
 
@@ -692,18 +766,49 @@ export default function CreateCampaign() {
               <summary style={{ cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem' }}>
                 Contribution limits (optional)
               </summary>
-              <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div
+                style={{
+                  marginTop: '0.75rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.75rem',
+                }}
+              >
                 <div className="form-stack">
                   <label htmlFor="cc-min">Minimum per contribution ({form.asset_type})</label>
-                  <input id="cc-min" type="number" min="0" step="any" value={form.min_contribution} onChange={setField('min_contribution')} placeholder="No minimum" />
+                  <input
+                    id="cc-min"
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={form.min_contribution}
+                    onChange={setField('min_contribution')}
+                    placeholder="No minimum"
+                  />
                 </div>
                 <div className="form-stack">
                   <label htmlFor="cc-max">Maximum per contribution ({form.asset_type})</label>
-                  <input id="cc-max" type="number" min="0" step="any" value={form.max_contribution} onChange={setField('max_contribution')} placeholder="No maximum" />
+                  <input
+                    id="cc-max"
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={form.max_contribution}
+                    onChange={setField('max_contribution')}
+                    placeholder="No maximum"
+                  />
                 </div>
                 <div className="form-stack">
                   <label htmlFor="cc-maxuser">Per-contributor cap ({form.asset_type})</label>
-                  <input id="cc-maxuser" type="number" min="0" step="any" value={form.max_per_user} onChange={setField('max_per_user')} placeholder="No cap" />
+                  <input
+                    id="cc-maxuser"
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={form.max_per_user}
+                    onChange={setField('max_per_user')}
+                    placeholder="No cap"
+                  />
                 </div>
               </div>
             </details>
@@ -714,7 +819,14 @@ export default function CreateCampaign() {
               </p>
             )}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', marginTop: '1.25rem' }}>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.65rem',
+                marginTop: '1.25rem',
+              }}
+            >
               <button
                 type="button"
                 className="btn-primary"
@@ -743,13 +855,35 @@ export default function CreateCampaign() {
         {step === 3 && (
           <>
             <div className="campaign-card" style={{ marginBottom: '1rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  gap: '0.75rem',
+                  flexWrap: 'wrap',
+                  marginBottom: '0.5rem',
+                }}
+              >
                 <strong>{t('createCampaign.milestonePlan')}</strong>
-                <span style={{ fontSize: '0.85rem', color: milestoneTotal === 100 || form.milestones.length === 0 ? 'var(--color-success-text)' : 'var(--color-warning-text)' }}>
-                {t('createCampaign.milestoneTotal', { count: milestoneTotal.toLocaleString() })}
+                <span
+                  style={{
+                    fontSize: '0.85rem',
+                    color:
+                      milestoneTotal === 100 || form.milestones.length === 0
+                        ? 'var(--color-success-text)'
+                        : 'var(--color-warning-text)',
+                  }}
+                >
+                  {t('createCampaign.milestoneTotal', { count: milestoneTotal.toLocaleString() })}
                 </span>
               </div>
-              <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.88rem', lineHeight: 1.5 }}>
+              <p
+                style={{
+                  color: 'var(--color-text-secondary)',
+                  fontSize: '0.88rem',
+                  lineHeight: 1.5,
+                }}
+              >
                 {t('createCampaign.milestoneHelp')}
               </p>
             </div>
@@ -762,9 +896,22 @@ export default function CreateCampaign() {
               <div style={{ display: 'grid', gap: '0.85rem' }}>
                 {form.milestones.map((milestone, index) => (
                   <div key={index} className="campaign-card">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        gap: '0.75rem',
+                        alignItems: 'center',
+                        marginBottom: '0.5rem',
+                      }}
+                    >
                       <strong>{t('createCampaign.milestone', { count: index + 1 })}</strong>
-                      <button type="button" className="btn-secondary" onClick={() => removeMilestone(index)} style={{ fontSize: '0.8rem' }}>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={() => removeMilestone(index)}
+                        style={{ fontSize: '0.8rem' }}
+                      >
                         Remove
                       </button>
                     </div>
@@ -777,7 +924,9 @@ export default function CreateCampaign() {
                       />
                     </div>
                     <div className="form-stack" style={{ marginTop: '0.75rem' }}>
-                      <label className="label-strong">{t('createCampaign.milestoneDescription')}</label>
+                      <label className="label-strong">
+                        {t('createCampaign.milestoneDescription')}
+                      </label>
                       <textarea
                         value={milestone.description}
                         onChange={(e) => setMilestoneField(index, 'description', e.target.value)}
@@ -793,7 +942,9 @@ export default function CreateCampaign() {
                         min="0.01"
                         step="0.01"
                         value={milestone.release_percentage}
-                        onChange={(e) => setMilestoneField(index, 'release_percentage', e.target.value)}
+                        onChange={(e) =>
+                          setMilestoneField(index, 'release_percentage', e.target.value)
+                        }
                         placeholder="25"
                       />
                     </div>
@@ -803,7 +954,12 @@ export default function CreateCampaign() {
             )}
 
             {form.milestones.length < 5 && (
-              <button type="button" className="btn-secondary" style={{ width: '100%', marginTop: '1rem' }} onClick={addMilestone}>
+              <button
+                type="button"
+                className="btn-secondary"
+                style={{ width: '100%', marginTop: '1rem' }}
+                onClick={addMilestone}
+              >
                 {t('createCampaign.addMilestone')}
               </button>
             )}
@@ -811,7 +967,7 @@ export default function CreateCampaign() {
             <div className="campaign-card" style={{ marginTop: '1.75rem', marginBottom: '1rem' }}>
               <strong>Reward tiers <span style={{ fontWeight: 500, color: 'var(--color-text-muted)' }}>(optional)</span></strong>
               <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.88rem', lineHeight: 1.5, marginTop: '0.35rem' }}>
-                Offer backer perks at set contribution levels. Backers who contribute at or above a tier's minimum unlock it. Up to 10 tiers.
+                Offer backer perks at set contribution levels. Backers who contribute at or above a {"tier's"} minimum unlock it. Up to 10 tiers.
               </p>
             </div>
 
@@ -893,11 +1049,14 @@ export default function CreateCampaign() {
             )}
 
             <div className="alert alert--info" style={{ marginTop: '1.25rem' }} role="status">
-              <strong>{t('createCampaign.launchSummary')}</strong> {form.title || 'Untitled'} with a goal of {form.target_amount || '—'} {form.asset_type}
+              <strong>{t('createCampaign.launchSummary')}</strong> {form.title || 'Untitled'} with a
+              goal of {form.target_amount || '—'} {form.asset_type}
               {form.min_contribution && ` (Min: ${form.min_contribution} ${form.asset_type})`}
               {form.max_contribution && ` (Max: ${form.max_contribution} ${form.asset_type})`}
               {form.max_per_user && ` (Cap: ${form.max_per_user} ${form.asset_type})`}
-              {form.milestones.length ? ` and ${form.milestones.length} milestone release${form.milestones.length > 1 ? 's' : ''}.` : ' and no milestone plan.'}
+              {form.milestones.length
+                ? ` and ${form.milestones.length} milestone release${form.milestones.length > 1 ? 's' : ''}.`
+                : ' and no milestone plan.'}
             </div>
 
             {error && (
@@ -906,8 +1065,20 @@ export default function CreateCampaign() {
               </p>
             )}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', marginTop: '1.25rem' }}>
-              <button type="submit" className="btn-primary" disabled={loading} style={{ width: '100%' }}>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.65rem',
+                marginTop: '1.25rem',
+              }}
+            >
+              <button
+                type="submit"
+                className="btn-primary"
+                disabled={loading}
+                style={{ width: '100%' }}
+              >
                 {loading ? t('createCampaign.creatingWallet') : t('createCampaign.launchCampaign')}
               </button>
               <button
