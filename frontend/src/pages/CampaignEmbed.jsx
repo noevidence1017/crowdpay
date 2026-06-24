@@ -150,7 +150,7 @@ export default function CampaignEmbed() {
             Goal: <strong>{Number(campaign.target_amount).toLocaleString()}</strong>{' '}
             {campaign.asset_type}
           </span>
-          {campaign.days_remaining != null && (
+          {campaign.days_remaining !== null && campaign.days_remaining !== undefined && (
             <span>
               <strong>{campaign.days_remaining}</strong> day{campaign.days_remaining !== 1 ? 's' : ''} left
             </span>

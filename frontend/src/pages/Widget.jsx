@@ -101,7 +101,7 @@ export default function Widget() {
           {raisedAmount.toLocaleString()} / {targetAmount.toLocaleString()} {data.asset_type}
           {' · '}
           {contributorCount} backer{contributorCount !== 1 ? 's' : ''}
-          {daysRemaining != null && (
+          {daysRemaining !== null && daysRemaining !== undefined && (
             <>
               {' · '}
               {daysRemaining} day{daysRemaining !== 1 ? 's' : ''} left

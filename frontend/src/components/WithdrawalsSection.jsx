@@ -634,13 +634,6 @@ export default function WithdrawalsSection({ campaign, milestones = [], user, to
                         type="button"
                         className="btn-primary"
                         disabled={busyId === row.id}
-                        onClick={() =>
-                          runAction(
-                            row.id,
-                            () => api.approveWithdrawalCreator(row.id),
-                            'Withdrawal signed'
-                          )
-                        }
                         style={{ fontSize: '0.8rem' }}
                         onClick={() => setConfirmingSignId(row.id)}
                       >

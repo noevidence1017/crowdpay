@@ -1165,7 +1165,7 @@ export default function Campaign() {
 
       <details style={{ ...styles.card, marginTop: '-0.75rem' }}>
         <summary style={styles.embedSummary}>Embed on your site</summary>
-        <pre style={{ ...styles.embedCode, marginTop: '0.75rem' }}>{embedCode}</pre>
+        <pre style={{ ...styles.embedCode, marginTop: '0.75rem' }}>{widgetEmbedCode}</pre>
         <button
           type="button"
           onClick={() => {

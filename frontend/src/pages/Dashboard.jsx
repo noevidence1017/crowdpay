@@ -186,22 +186,15 @@ export default function Dashboard() {
           updateUser(me);
           setStats(s);
           setCampaigns(c);
-          setContributions(contrib);
-          // pre-fetch dashboard analytics for the analytics tab
-          api
-            .getUserDashboardAnalytics()
-            .then(setDashAnalytics)
-            .catch(() => {});
-        } else {
-          setContributions(results[0]);
-        }
-      })
-      .catch((err) => setError(err.message || 'Could not load dashboard'))
-      .finally(() => {
-        setLoadingCampaigns(false);
-        setLoadingContributions(false);
-      });
-  }, [user?.role, updateUser]);
+          api.getUserDashboardAnalytics().then(setDashAnalytics).catch(() => {});
+        })
+        .catch((err) => setError(err.message || 'Could not load dashboard'))
+        .finally(() => setLoadingCampaigns(false));
+      return;
+    }
+
+    setLoadingCampaigns(false);
+  }, [isCreator, updateUser]);
 
   const loadCampaignAnalytics = useCallback((id) => {
     setSelectedCampaignId(id);
@@ -295,7 +288,7 @@ export default function Dashboard() {
   }
   if (!user) return <Navigate to="/login" replace />;
 
-  const loading = activeTab === 'campaigns' ? loadingCampaigns : loadingContributions;
+  const loading = activeTab === 'campaigns' ? loadingCampaigns : false;
   const visibleTabs = isCreator ? TABS : TABS.filter((t) => t.id !== 'analytics');
 
   return (
