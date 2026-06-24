@@ -90,6 +90,8 @@ export default function ContributeModal({
     paymentMethod === 'anchor' ? selectedAnchor?.asset?.code || campaign.asset_type : sendAsset;
   const isPathPayment = effectiveSendAsset !== campaign.asset_type;
   const destAmount = amount.trim();
+  const matchedTier = matchTier(tiers, destAmount);
+  const [unlockedTier, setUnlockedTier] = useState(null);
 
   const kycRequired =
     user?.kyc_required_for_campaigns ??
@@ -437,6 +439,7 @@ export default function ContributeModal({
     setLoading(true);
     setLoadingLabel('Submitting…');
     setError('');
+    setUnlockedTier(matchedTier);
     try {
       const data =
         paymentMethod === 'anchor'
@@ -752,6 +755,18 @@ export default function ContributeModal({
                 </span>
               </div>
 
+              {tiers.length > 0 && destAmount && Number(destAmount) > 0 && (
+                matchedTier ? (
+                  <div className="alert alert--success" style={{ marginBottom: '1rem', fontSize: '0.85rem' }} role="status">
+                    <strong>Unlocks tier:</strong> {matchedTier.title} (from {Number(matchedTier.min_amount).toLocaleString()} {campaign.asset_type})
+                  </div>
+                ) : (
+                  <div className="alert alert--info" style={{ marginBottom: '1rem', fontSize: '0.85rem' }} role="status">
+                    This amount does not yet reach a reward tier.
+                  </div>
+                )
+              )}
+
               <div className="form-stack" style={{ marginBottom: '1rem' }}>
                 <label className="label-strong" htmlFor="contrib-display-name">
                   Display name{' '}
@@ -979,6 +994,11 @@ export default function ContributeModal({
             <p className="alert alert--success" style={{ marginBottom: '1rem' }} role="status">
               Your contribution is on its way. It usually confirms in a few seconds on Stellar.
             </p>
+            {unlockedTier && (
+              <p className="alert alert--success" style={{ marginBottom: '1rem', fontSize: '0.9rem' }} role="status">
+                🎉 You've unlocked: <strong>{unlockedTier.title}</strong>
+              </p>
+            )}
             {result?.tx_hash && (
               <p style={{ fontSize: '0.875rem', marginBottom: '0.75rem', wordBreak: 'break-all' }}>
                 <strong>Transaction</strong>{' '}

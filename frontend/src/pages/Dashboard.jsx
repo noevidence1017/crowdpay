@@ -7,6 +7,7 @@ import VerificationBadge from '../components/VerificationBadge';
 import CampaignStatusBadge from '../components/CampaignStatusBadge';
 import ContributorDashboard from '../components/ContributorDashboard';
 import DepositModal from '../components/DepositModal';
+import ApiKeysPanel from '../components/ApiKeysPanel';
 import { stellarExpertTxUrl, stellarExpertAccountUrl } from '../config/stellar';
 import {
   LineChart,
@@ -22,6 +23,7 @@ const TABS = [
   { id: 'campaigns', label: 'My Campaigns' },
   { id: 'contributions', label: 'My Contributions' },
   { id: 'analytics', label: 'Analytics' },
+  { id: 'api-keys', label: 'API Keys' },
 ];
 
 function progressPct(campaign) {
@@ -274,6 +276,8 @@ export default function Dashboard() {
       setSearchParams({ tab: 'analytics' });
     } else if (tabId === 'referrals') {
       setSearchParams({ tab: 'referrals' });
+    } else if (tabId === 'api-keys') {
+      setSearchParams({ tab: 'api-keys' });
     } else {
       setSearchParams({});
     }
@@ -908,6 +912,8 @@ export default function Dashboard() {
           )}
         </section>
       )}
+
+      {activeTab === 'api-keys' && <ApiKeysPanel />}
 
       {showDepositModal && (
         <DepositModal

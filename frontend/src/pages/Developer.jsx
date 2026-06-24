@@ -117,7 +117,7 @@ export default function Developer() {
     setRevealedKey('');
     setError('');
     try {
-      const res = await api.createApiKey({ label: newKeyLabel, scopes: newKeyScopes });
+      const res = await api.createApiKey({ name: newKeyLabel, scopes: newKeyScopes });
       setRevealedKey(res.api_key);
       await refresh();
     } catch (err) {
@@ -280,7 +280,7 @@ export default function Developer() {
               type="password"
               value={explorerApiKey}
               onChange={(e) => setExplorerApiKey(e.target.value)}
-              placeholder="cp_live_…"
+              placeholder="cpk_…"
               style={{ display: 'block', width: '100%', marginTop: '0.35rem' }}
             />
           </label>
@@ -408,7 +408,7 @@ export default function Developer() {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
           <thead>
             <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--color-border-light)' }}>
-              <th style={{ padding: '0.4rem' }}>Label</th>
+              <th style={{ padding: '0.4rem' }}>Name</th>
               <th>Prefix</th>
               <th>Scopes</th>
               <th>Last used</th>

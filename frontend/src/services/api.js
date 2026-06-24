@@ -330,9 +330,9 @@ export const api = {
   adminUnbanUser: (id) => request('PATCH', `/admin/users/${id}/unban`, {}),
   adminPromoteUser: (id) => request('PATCH', `/admin/users/${id}/promote`, {}),
   adminDemoteUser: (id) => request('PATCH', `/admin/users/${id}/demote`, {}),
-  listApiKeys: () => request('GET', '/api-keys'),
-  createApiKey: (body) => request('POST', '/api-keys', body),
-  deleteApiKey: (id) => request('DELETE', `/api-keys/${id}`),
+  listApiKeys: () => request('GET', '/users/api-keys'),
+  createApiKey: (body) => request('POST', '/users/api-keys', body),
+  deleteApiKey: (id) => request('DELETE', `/users/api-keys/${id}`),
   listWebhooks: () => request('GET', '/webhooks'),
   createWebhook: (body) => request('POST', '/webhooks', body),
   listWebhookDeliveries: (options = {}) =>
