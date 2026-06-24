@@ -207,6 +207,9 @@ export const api = {
   getMyBalance: () => request("GET", "/users/me/balance"),
   getMyStats: () => request("GET", "/users/me/stats"),
   getMyContributions: () => request("GET", "/contributions/mine"),
+  getContributorDashboard: () => request("GET", "/contributions/dashboard"),
+  requestContributionRefund: (contributionId) =>
+    request("POST", `/contributions/${contributionId}/refund`, {}),
   startKyc: () => request("POST", "/auth/kyc/start"),
   getKycStatus: () => request("GET", "/auth/kyc/status"),
 

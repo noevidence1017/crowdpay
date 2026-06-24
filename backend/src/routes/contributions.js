@@ -26,7 +26,7 @@ const {
   buildContributionMemo,
   submitCustodialContribution,
 } = require('../services/contributionService');
-const { listUserContributions } = require('../services/userDashboardService');
+const { listUserContributions, getContributorDashboard } = require('../services/userDashboardService');
 const { requestRefund: contractRequestRefund } = require('../services/sorobanService');
 const { assertUserKycVerified } = require('../services/kycService');
 const asyncHandler = require('../utils/asyncHandler');
@@ -141,6 +141,12 @@ router.get('/mine', requireAuth, asyncHandler(async (req, res) => {
   const rows = await listUserContributions(req.user.userId);
   if (rows === null) return res.status(404).json({ error: 'User not found' });
   res.json(rows);
+}));
+
+router.get('/dashboard', requireAuth, asyncHandler(async (req, res) => {
+  const data = await getContributorDashboard(req.user.userId);
+  if (data === null) return res.status(404).json({ error: 'User not found' });
+  res.json(data);
 }));
 
 router.get('/campaign/:campaignId', async (req, res) => {
