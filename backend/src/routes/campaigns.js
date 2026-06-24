@@ -442,7 +442,7 @@ router.get('/:id', asyncHandler(async (req, res) => {
   const token =
     req.cookies?.cp_token ||
     (header && header.startsWith('Bearer ') ? header.slice(7).trim() : null);
-  if (token && !token.startsWith('cp_live_')) {
+  if (token && !token.startsWith('cp_live_') && !token.startsWith('cpk_')) {
     try {
       const jwt = require('jsonwebtoken');
       const payload = jwt.verify(token, process.env.JWT_SECRET);

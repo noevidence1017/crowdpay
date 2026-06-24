@@ -7,6 +7,7 @@ import VerificationBadge from '../components/VerificationBadge';
 import CampaignStatusBadge from '../components/CampaignStatusBadge';
 import ContributorDashboard from '../components/ContributorDashboard';
 import DepositModal from '../components/DepositModal';
+import ApiKeysPanel from '../components/ApiKeysPanel';
 import { stellarExpertTxUrl, stellarExpertAccountUrl } from '../config/stellar';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
@@ -16,6 +17,7 @@ const TABS = [
   { id: 'campaigns', label: 'My Campaigns' },
   { id: 'contributions', label: 'My Contributions' },
   { id: 'analytics', label: 'Analytics' },
+  { id: 'api-keys', label: 'API Keys' },
 ];
 
 function progressPct(campaign) {
@@ -102,7 +104,15 @@ export default function Dashboard() {
   const { user, token, ready, updateUser } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
-  const activeTab = tabParam === 'contributions' ? 'contributions' : tabParam === 'referrals' ? 'referrals' : 'campaigns';
+  const activeTab = tabParam === 'contributions'
+    ? 'contributions'
+    : tabParam === 'referrals'
+      ? 'referrals'
+      : tabParam === 'api-keys'
+        ? 'api-keys'
+        : tabParam === 'analytics'
+          ? 'analytics'
+          : 'campaigns';
 
   const [stats, setStats] = useState(null);
   const [campaigns, setCampaigns] = useState([]);
@@ -121,9 +131,9 @@ export default function Dashboard() {
 
   const isCreator = user?.role === 'creator' || user?.role === 'admin';
 
-  const tabs = isCreator
+  const visibleTabs = isCreator
     ? [...TABS, { id: 'referrals', label: 'Referrals' }]
-    : TABS;
+    : TABS.filter((t) => t.id !== 'analytics');
 
   const kycRequired =
     user?.kyc_required_for_campaigns ??
@@ -227,6 +237,8 @@ export default function Dashboard() {
       setSearchParams({ tab: 'analytics' });
     } else if (tabId === 'referrals') {
       setSearchParams({ tab: 'referrals' });
+    } else if (tabId === 'api-keys') {
+      setSearchParams({ tab: 'api-keys' });
     } else {
       setSearchParams({});
     }
@@ -716,6 +728,8 @@ export default function Dashboard() {
           )}
         </section>
       )}
+
+      {activeTab === 'api-keys' && <ApiKeysPanel />}
 
       {showDepositModal && (
         <DepositModal

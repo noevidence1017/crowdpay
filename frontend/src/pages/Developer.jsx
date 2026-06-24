@@ -115,7 +115,7 @@ export default function Developer() {
     setRevealedKey('');
     setError('');
     try {
-      const res = await api.createApiKey({ label: newKeyLabel, scopes: newKeyScopes });
+      const res = await api.createApiKey({ name: newKeyLabel, scopes: newKeyScopes });
       setRevealedKey(res.api_key);
       await refresh();
     } catch (err) {
@@ -261,7 +261,7 @@ export default function Developer() {
               type="password"
               value={explorerApiKey}
               onChange={(e) => setExplorerApiKey(e.target.value)}
-              placeholder="cp_live_…"
+              placeholder="cpk_…"
               style={{ display: 'block', width: '100%', marginTop: '0.35rem' }}
             />
           </label>
@@ -321,7 +321,7 @@ export default function Developer() {
           </div>
         )}
         <form onSubmit={createKey} style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center', marginBottom: '1rem' }}>
-          <input value={newKeyLabel} onChange={(e) => setNewKeyLabel(e.target.value)} placeholder="Label" style={{ minWidth: '160px' }} />
+          <input value={newKeyLabel} onChange={(e) => setNewKeyLabel(e.target.value)} placeholder="Key name" style={{ minWidth: '160px' }} />
           <span style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>Scopes:</span>
           {SCOPE_OPTIONS.map((sc) => (
             <label key={sc} style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
@@ -334,7 +334,7 @@ export default function Developer() {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
           <thead>
             <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--color-border-light)' }}>
-              <th style={{ padding: '0.4rem' }}>Label</th>
+              <th style={{ padding: '0.4rem' }}>Name</th>
               <th>Prefix</th>
               <th>Scopes</th>
               <th>Last used</th>
@@ -344,7 +344,7 @@ export default function Developer() {
           <tbody>
             {keys.filter((k) => !k.revoked_at).map((k) => (
               <tr key={k.id} style={{ borderBottom: '1px solid var(--color-border-lighter)' }}>
-                <td style={{ padding: '0.45rem' }}>{k.label}</td>
+                <td style={{ padding: '0.45rem' }}>{k.name || k.label}</td>
                 <td><code>{k.key_prefix}</code></td>
                 <td>{(k.scopes || []).join(', ')}</td>
                 <td style={{ color: 'var(--color-text-hint)' }}>{k.last_used_at ? new Date(k.last_used_at).toLocaleString() : '—'}</td>
