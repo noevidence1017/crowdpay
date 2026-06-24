@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { api } from '../services/api';
-import { stellarExpertTxUrl } from '../config/stellar';
+import ContributorDashboard from '../components/ContributorDashboard';
 
 export default function MyContributions() {
   const { token, ready } = useAuth();
@@ -27,7 +26,7 @@ export default function MyContributions() {
     );
   }
 
-  if (!token) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/login" replace />;
 
   return (
     <main className="container" style={{ paddingTop: '2rem', paddingBottom: '3rem' }}>
