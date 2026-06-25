@@ -10,6 +10,8 @@ import MilestoneTracker from '../components/MilestoneTracker';
 import WithdrawalsSection from '../components/WithdrawalsSection';
 import CampaignDetailSkeleton from '../components/skeletons/CampaignDetailSkeleton';
 import ContributionListSkeleton from '../components/skeletons/ContributionListSkeleton';
+import MilestonesSkeletonLoader from '../components/skeletons/MilestonesSkeletonLoader';
+import AnalyticsSkeletonLoader from '../components/skeletons/AnalyticsSkeletonLoader';
 import VerificationBadge from '../components/VerificationBadge';
 import CampaignStatusBadge from '../components/CampaignStatusBadge';
 import { stellarExpertTxUrl, stellarExpertContractUrl } from '../config/stellar';
@@ -143,6 +145,8 @@ export default function Campaign() {
   const [coverUploadError, setCoverUploadError] = useState(location.state?.coverUploadError || '');
   const [updates, setUpdates] = useState([]);
   const [milestones, setMilestones] = useState([]);
+  const [milestonesLoading, setMilestonesLoading] = useState(true);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [contractStatus, setContractStatus] = useState(null);
   const [contractStatusError, setContractStatusError] = useState('');
   const [tiers, setTiers] = useState([]);
@@ -235,12 +239,15 @@ export default function Campaign() {
           setMembers([]);
         }
         if (role === 'owner' || role === 'manager' || role === 'viewer') {
+          setAnalyticsLoading(true);
           api
             .getCampaignAnalytics(id)
             .then(setAnalytics)
-            .catch(() => setAnalytics(null));
+            .catch(() => setAnalytics(null))
+            .finally(() => setAnalyticsLoading(false));
         } else {
           setAnalytics(null);
+          setAnalyticsLoading(false);
         }
       })
       .catch((err) => setLoadError(err.message || 'Could not load campaign.'));
@@ -254,10 +261,12 @@ export default function Campaign() {
         setContributions([]);
         setTotalContributions(0);
       });
+    setMilestonesLoading(true);
     api
       .getMilestones(id)
       .then(setMilestones)
-      .catch(() => setMilestones([]));
+      .catch(() => setMilestones([]))
+      .finally(() => setMilestonesLoading(false));
     api
       .getContractStatus(id)
       .then((data) => {
@@ -1616,11 +1625,15 @@ export default function Campaign() {
         isCreator={!!(user?.id && campaign.creator_id === user.id)}
       />
 
-      <MilestoneTracker
-        milestones={milestones}
-        assetType={campaign.asset_type}
-        contractMilestones={contractStatus?.milestones}
-      />
+      {milestonesLoading ? (
+        <MilestonesSkeletonLoader />
+      ) : (
+        <MilestoneTracker
+          milestones={milestones}
+          assetType={campaign.asset_type}
+          contractMilestones={contractStatus?.milestones}
+        />
+      )}
       {canManageTeam && (
         <div style={{ marginBottom: '2rem' }} data-no-print>
           <div
@@ -2027,7 +2040,10 @@ export default function Campaign() {
       ))}
 
       {/* Analytics Section */}
-      {canViewAnalytics && analytics && (canManageTeam ? activeTab === 'analytics' : true) && (
+      {canViewAnalytics && analyticsLoading && (canManageTeam ? activeTab === 'analytics' : true) && (
+        <AnalyticsSkeletonLoader />
+      )}
+      {canViewAnalytics && !analyticsLoading && analytics && (canManageTeam ? activeTab === 'analytics' : true) && (
         <div style={{ marginBottom: '2rem' }}>
           <h2 style={styles.sectionTitle}>Analytics</h2>
           {!analytics.dailyTotals || analytics.dailyTotals.length === 0 ? (
