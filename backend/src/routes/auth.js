@@ -2,6 +2,8 @@ const router = require('express').Router();
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { authenticator } = require('otplib');
+const qrcode = require('qrcode');
 const rateLimit = require('express-rate-limit');
 const { Keypair } = require('@stellar/stellar-sdk');
 const db = require('../config/database');
@@ -94,6 +96,15 @@ const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: isTest ? 100000 : 20,
   message: { error: 'Too many requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => isTest,
+});
+
+const totpChallengeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: isTest ? 100000 : 10,
+  message: { error: 'Too many 2FA attempts, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
   skip: () => isTest,
@@ -400,6 +411,11 @@ router.post('/login', loginLimiter, loginValidation, validateRequest, async (req
   }
 
   const user = rows[0];
+
+  if (user.totp_enabled) {
+    return res.json({ requires_2fa: true });
+  }
+
   const { accessToken } = generateTokens(user);
   const { token: refreshToken, expiresAt } = await createRefreshToken(user.id);
 
@@ -419,6 +435,118 @@ router.post('/login', loginLimiter, loginValidation, validateRequest, async (req
       kyc_completed_at: user.kyc_completed_at,
       kyc_required_for_campaigns: isKycRequiredForCampaigns(),
     },
+  });
+});
+
+router.post('/2fa/challenge', totpChallengeLimiter, validateRequest, async (req, res) => {
+  const { email, password, code } = req.body;
+  if (!email || !password || !code) {
+    return res.status(400).json({ error: 'Email, password, and code are required' });
+  }
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const { rows } = await db.query('SELECT * FROM users WHERE LOWER(email) = $1', [normalizedEmail]);
+
+  if (!rows.length || !(await bcrypt.compare(password, rows[0].password_hash))) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+
+  const user = rows[0];
+  if (!user.totp_enabled) {
+    return res.status(400).json({ error: '2FA is not enabled for this account' });
+  }
+
+  let codeValid = false;
+
+  if (code.length === 6) {
+    codeValid = authenticator.verify({ token: code, secret: user.totp_secret });
+  } else if (user.backup_codes && user.backup_codes.length > 0) {
+    for (let i = 0; i < user.backup_codes.length; i++) {
+      if (await bcrypt.compare(code, user.backup_codes[i])) {
+        codeValid = true;
+        // remove used backup code
+        user.backup_codes.splice(i, 1);
+        await db.query('UPDATE users SET backup_codes = $1 WHERE id = $2', [user.backup_codes, user.id]);
+        break;
+      }
+    }
+  }
+
+  if (!codeValid) {
+    return res.status(401).json({ error: 'Invalid 2FA code' });
+  }
+
+  const { accessToken } = generateTokens(user);
+  const { token: refreshToken, expiresAt } = await createRefreshToken(user.id);
+
+  setRefreshTokenCookie(res, refreshToken, expiresAt);
+  setAccessTokenCookie(res, accessToken);
+
+  res.json({
+    token: accessToken,
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      wallet_public_key: user.wallet_public_key,
+      wallet_type: user.wallet_type || 'custodial',
+      role: user.role,
+      kyc_status: user.kyc_status,
+      kyc_completed_at: user.kyc_completed_at,
+      kyc_required_for_campaigns: isKycRequiredForCampaigns(),
+    },
+  });
+});
+
+router.post('/2fa/setup', requireAuth, async (req, res) => {
+  const { rows } = await db.query('SELECT * FROM users WHERE id = $1', [req.user.userId]);
+  const user = rows[0];
+
+  if (user.role !== 'admin' && user.role !== 'creator') {
+    return res.status(403).json({ error: '2FA is only available for creator and admin accounts' });
+  }
+  if (user.totp_enabled) {
+    return res.status(400).json({ error: '2FA is already enabled' });
+  }
+
+  const secret = authenticator.generateSecret();
+  const otpauth = authenticator.keyuri(user.email, 'CrowdPay', secret);
+  const qrCodeDataUrl = await qrcode.toDataURL(otpauth);
+
+  await db.query('UPDATE users SET totp_secret = $1 WHERE id = $2', [secret, user.id]);
+
+  res.json({
+    secret,
+    qrCodeDataUrl
+  });
+});
+
+router.post('/2fa/verify', requireAuth, async (req, res) => {
+  const { code } = req.body;
+  if (!code) {
+    return res.status(400).json({ error: 'Code is required' });
+  }
+
+  const { rows } = await db.query('SELECT * FROM users WHERE id = $1', [req.user.userId]);
+  const user = rows[0];
+
+  if (!user.totp_secret) {
+    return res.status(400).json({ error: '2FA setup not initiated' });
+  }
+
+  const isValid = authenticator.verify({ token: code, secret: user.totp_secret });
+  if (!isValid) {
+    return res.status(401).json({ error: 'Invalid 2FA code' });
+  }
+
+  // Generate 8 backup codes
+  const rawBackupCodes = Array.from({ length: 8 }, () => crypto.randomBytes(4).toString('hex'));
+  const hashedBackupCodes = await Promise.all(rawBackupCodes.map(bc => bcrypt.hash(bc, 10)));
+
+  await db.query('UPDATE users SET totp_enabled = true, backup_codes = $1 WHERE id = $2', [hashedBackupCodes, user.id]);
+
+  res.json({
+    message: '2FA enabled successfully',
+    backupCodes: rawBackupCodes
   });
 });
 

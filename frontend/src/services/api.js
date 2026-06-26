@@ -197,6 +197,9 @@ export const api = {
 
   register: (body) => request('POST', '/auth/register', body),
   login: (body) => request('POST', '/auth/login', body),
+  login2FA: (body) => request('POST', '/auth/2fa/challenge', body),
+  setup2FA: () => request('POST', '/auth/2fa/setup'),
+  verify2FA: (body) => request('POST', '/auth/2fa/verify', body),
   forgotPassword: (body) => request('POST', '/auth/forgot-password', body),
   resetPassword: (body) => request('POST', '/auth/reset-password', body),
   logout: () => logout(),

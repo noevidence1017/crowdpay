@@ -13,6 +13,8 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [step, setStep] = useState(1);
+  const [code, setCode] = useState('');
 
   function set(field) {
     return (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
@@ -20,24 +22,46 @@ export default function Login() {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!form.email.trim() || !form.password.trim()) {
-      setError(t('login.required'));
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
-      setError(t('login.invalidEmail'));
-      return;
-    }
-    setLoading(true);
-    setError('');
-    try {
-      const { user } = await api.login(form);
-      login(user);
-      navigate(location.state?.from || '/', { replace: true });
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+    if (step === 1) {
+      if (!form.email.trim() || !form.password.trim()) {
+        setError(t('login.required'));
+        return;
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+        setError(t('login.invalidEmail'));
+        return;
+      }
+      setLoading(true);
+      setError('');
+      try {
+        const res = await api.login(form);
+        if (res.requires_2fa) {
+          setStep(2);
+        } else {
+          login(res.user);
+          navigate(location.state?.from || '/', { replace: true });
+        }
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      if (!code.trim()) {
+        setError('2FA code is required');
+        return;
+      }
+      setLoading(true);
+      setError('');
+      try {
+        const { user } = await api.login2FA({ ...form, code });
+        login(user);
+        navigate(location.state?.from || '/', { replace: true });
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
     }
   }
 
@@ -51,45 +75,58 @@ export default function Login() {
         onSubmit={handleSubmit}
         style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}
       >
-        <input
-          type="email"
-          placeholder={t('login.email')}
-          value={form.email}
-          onChange={set('email')}
-          required
-        />
-        <div style={{ position: 'relative' }}>
+        {step === 1 ? (
+          <>
+            <input
+              type="email"
+              placeholder={t('login.email')}
+              value={form.email}
+              onChange={set('email')}
+              required
+            />
+            <div style={{ position: 'relative' }}>
+              <input
+                id="login-password"
+                type={showPassword ? 'text' : 'password'}
+                placeholder={t('login.password')}
+                value={form.password}
+                onChange={set('password')}
+                required
+                style={{ paddingRight: '2.5rem', width: '100%' }}
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                aria-label={showPassword ? t('login.hidePassword') : t('login.showPassword')}
+                onClick={() => setShowPassword((v) => !v)}
+                style={{
+                  position: 'absolute',
+                  right: '0.6rem',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#888',
+                  padding: '0.2rem',
+                  minHeight: 'auto',
+                  fontSize: '0.85rem',
+                }}
+              >
+                {showPassword ? t('common.hide') : t('common.show')}
+              </button>
+            </div>
+          </>
+        ) : (
           <input
-            id="login-password"
-            type={showPassword ? 'text' : 'password'}
-            placeholder={t('login.password')}
-            value={form.password}
-            onChange={set('password')}
+            type="text"
+            placeholder="6-digit 2FA code or backup code"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
             required
-            style={{ paddingRight: '2.5rem', width: '100%' }}
-            autoComplete="current-password"
+            autoComplete="one-time-code"
           />
-          <button
-            type="button"
-            aria-label={showPassword ? t('login.hidePassword') : t('login.showPassword')}
-            onClick={() => setShowPassword((v) => !v)}
-            style={{
-              position: 'absolute',
-              right: '0.6rem',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: '#888',
-              padding: '0.2rem',
-              minHeight: 'auto',
-              fontSize: '0.85rem',
-            }}
-          >
-            {showPassword ? t('common.hide') : t('common.show')}
-          </button>
-        </div>
+        )}
         {error && (
           <p style={{ color: 'var(--color-status-error)', fontSize: '0.875rem' }}>{error}</p>
         )}

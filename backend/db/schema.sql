@@ -22,6 +22,9 @@ CREATE TABLE users (
   kyc_provider_reference  TEXT,
   kyc_completed_at        TIMESTAMPTZ,
   is_admin                BOOLEAN DEFAULT FALSE,
+  totp_secret             TEXT,
+  totp_enabled            BOOLEAN DEFAULT FALSE,
+  backup_codes            TEXT[],
   created_at              TIMESTAMPTZ DEFAULT NOW()
 );
 
