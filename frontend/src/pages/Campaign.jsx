@@ -299,18 +299,6 @@ export default function Campaign() {
   }, [id, token, contributed, showAll]);
 
   useEffect(() => {
-    if (!campaign || !id || !user) return;
-    const currentUserId = user.id || user.userId;
-    const resolvedRole =
-      campaign.user_role ||
-      (currentUserId && String(campaign.creator_id) === String(currentUserId)
-        ? "owner"
-        : null);
-    if (resolvedRole !== "owner") return;
-    api.getReferralLeaderboard(id).then(setReferralLeaderboard).catch(() => {});
-  }, [campaign, id, user]);
-
-  useEffect(() => {
     if (!id) return;
     if (isLive) return;
     if (!campaign) return;
