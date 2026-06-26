@@ -156,8 +156,8 @@ async function refresh() {
       try {
         const data = JSON.parse(text);
         error = data.error || error;
-      } catch (_e) {
-        // Ignore JSON parse errors
+      } catch (_err) {
+        // ignore
       }
       refreshPromise = null;
       throw new Error(error);
@@ -183,8 +183,8 @@ async function logout() {
     try {
       const data = JSON.parse(text);
       error = data.error || error;
-    } catch (_e) {
-      // Ignore JSON parse errors
+    } catch (_err) {
+      /* ignore */
     }
     throw new Error(error);
   }
@@ -206,14 +206,13 @@ export const api = {
   getMyBalance: () => request('GET', '/users/me/balance'),
   getMyStats: () => request('GET', '/users/me/stats'),
   getMyContributions: () => request('GET', '/contributions/mine'),
-  startKyc: () => request('POST', '/users/me/kyc/start'),
+  startKyc: () => request('POST', '/auth/kyc/start'),
+  getKycStatus: () => request('GET', '/auth/kyc/status'),
 
   getMyCampaigns: () => request('GET', '/campaigns/mine'),
   getFeaturedCampaigns: () => request('GET', '/campaigns/featured'),
-  getCampaignCategories: () => request('GET', '/campaigns/categories'),
   getCampaigns: (options = {}) => request('GET', '/campaigns', null, { query: options }),
   getCampaign: (id, options = {}) => request('GET', `/campaigns/${id}`, null, { query: options }),
-  getContractStatus: (id) => request('GET', `/campaigns/${id}/contract-status`),
   getCampaignAnalytics: (id) => request('GET', `/campaigns/${id}/analytics`),
   getCampaignAnalyticsContributors: (id) =>
     request('GET', `/campaigns/${id}/analytics/contributors`),
@@ -221,6 +220,7 @@ export const api = {
   getCampaignEmbed: (id) => request('GET', `/campaigns/${id}/embed`),
   getCampaignBackers: (id) => request('GET', `/campaigns/${id}/backers`),
   getCampaignBalance: (id) => request('GET', `/campaigns/${id}/balance`),
+  getCloneData: (id) => request('GET', `/campaigns/${id}/clone-data`),
   createCampaign: (body) => request('POST', '/campaigns', body),
   updateCampaign: (id, body) => request('PATCH', `/campaigns/${id}`, body),
   deleteCampaign: (id) => request('DELETE', `/campaigns/${id}`),
@@ -316,12 +316,25 @@ export const api = {
   getAdminStats: () => request('GET', '/admin/stats'),
   getAdminHealth: () => request('GET', '/admin/health'),
   getAdminCampaigns: () => request('GET', '/admin/campaigns'),
+  getAdminWithdrawals: (options = {}) =>
+    request('GET', '/admin/withdrawals', null, { query: options }),
+  getAdminDisputes: (options = {}) => request('GET', '/admin/disputes', null, { query: options }),
+  getAdminDispute: (id) => request('GET', `/admin/disputes/${id}`),
+  getAdminKycCampaigns: () => request('GET', '/admin/kyc/campaigns'),
+  getAdminCampaignContributions: (campaignId, options = {}) =>
+    request('GET', `/admin/campaigns/${campaignId}/contributions`, null, { query: options }),
+  getAdminWebhookDeliveries: (options = {}) =>
+    request('GET', '/admin/webhook-deliveries', null, { query: options }),
+  adminRetryWebhookDelivery: (id, body) =>
+    request('POST', `/admin/webhook-deliveries/${id}/retry`, body),
+  adminUpdateUserKyc: (id, body) => request('PATCH', `/admin/users/${id}/kyc`, body),
   getAdminMilestones: (options = {}) =>
     request('GET', '/admin/milestones', null, { query: options }),
-  getAdminUsers: (include_banned = false) =>
-    request('GET', '/admin/users', null, {
-      query: { include_banned: include_banned ? 'true' : 'false' },
-    }),
+  getAdminUsers: (options = {}) => {
+    const query =
+      typeof options === 'boolean' ? { include_banned: options ? 'true' : 'false' } : options;
+    return request('GET', '/admin/users', null, { query });
+  },
   getAdminAuditLog: (options = {}) => request('GET', '/admin/audit-log', null, { query: options }),
   updateCampaignStatus: (id, status) =>
     request('PATCH', `/admin/campaigns/${id}/status`, { status }),

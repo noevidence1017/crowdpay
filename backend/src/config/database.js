@@ -1,7 +1,11 @@
-process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5433/crowdpay';
-
 const { Pool } = require('pg');
 const logger = require('./logger');
+
+if (!process.env.DATABASE_URL && process.env.NODE_ENV !== 'test') {
+  throw new Error(
+    'DATABASE_URL environment variable is required. Set it in your .env file.'
+  );
+}
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,

@@ -14,13 +14,7 @@ const { watchCampaignWallet, addSSEClient, removeSSEClient } = require('../servi
 const { emitWebhookEventForUser, WEBHOOK_EVENTS } = require('../services/webhookDispatcher');
 const { refreshCampaignStatus, refreshActiveCampaignStatuses } = require('../services/campaignStatusService');
 const { queueFailedCampaignRefunds } = require('../services/campaignStatusActions');
-const {
-  deployCampaignContracts,
-  getContractStatus,
-  invokeContract,
-  encodeMilestone,
-  nativeToScVal,
-} = require('../services/sorobanService');
+const { invokeContract, encodeMilestone, nativeToScVal, deployCampaignContracts } = require('../services/sorobanService');
 const { sendEmail, sendTeamMemberInvitedEmail } = require('../services/emailService');
 const { uploadCampaignCoverImage } = require('../services/storage');
 const { isKycRequiredForCampaigns } = require('../services/kycProvider');
@@ -364,6 +358,53 @@ router.post('/:id/milestones', requireAuth, requireCampaignMember('owner'), asyn
   } finally {
     client.release();
   }
+}));
+
+router.get('/:id/clone-data', requireAuth, requireCampaignMember('owner'), asyncHandler(async (req, res) => {
+  const campaignId = req.params.id;
+
+  const { rows: campaignRows } = await db.query(
+    `SELECT title, description, target_amount, asset_type, category, min_contribution, max_contribution, max_per_user, show_backer_amounts
+     FROM campaigns 
+     WHERE id = $1`,
+    [campaignId]
+  );
+
+  if (!campaignRows.length) {
+    return res.status(404).json({ error: 'Campaign not found' });
+  }
+
+  const campaign = campaignRows[0];
+
+  const { rows: milestones } = await db.query(
+    `SELECT title, description, release_percentage
+     FROM milestones 
+     WHERE campaign_id = $1 
+     ORDER BY sort_order ASC`,
+    [campaignId]
+  );
+
+  const { rows: reward_tiers } = await db.query(
+    `SELECT title, description, min_amount, "limit", estimated_delivery
+     FROM reward_tiers 
+     WHERE campaign_id = $1
+     ORDER BY min_amount ASC`,
+    [campaignId]
+  );
+
+  res.json({
+    title: `Copy of ${campaign.title}`,
+    description: campaign.description,
+    target_amount: campaign.target_amount,
+    asset_type: campaign.asset_type,
+    category: campaign.category,
+    min_contribution: campaign.min_contribution,
+    max_contribution: campaign.max_contribution,
+    max_per_user: campaign.max_per_user,
+    show_backer_amounts: campaign.show_backer_amounts,
+    milestones: milestones,
+    reward_tiers: reward_tiers
+  });
 }));
 
 // Get single Campaign
@@ -1137,16 +1178,13 @@ router.patch('/:id', requireAuth, asyncHandler(async (req, res) => {
     // Validate ISO8601 format
     const deadlineDate = new Date(deadline);
     if (isNaN(deadlineDate.getTime())) {
-      return res.status(422).json({ error: 'Deadline must be a valid date' });
+      return res.status(422).json({ error: 'Deadline must be a valid ISO 8601 date' });
     }
 
-    // Check deadline is not in the past
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    deadlineDate.setHours(0, 0, 0, 0);
-
-    if (deadlineDate < today) {
-      return res.status(422).json({ error: 'Deadline cannot be in the past' });
+    // Check deadline is not in the past (UTC comparison)
+    const now = new Date();
+    if (deadlineDate.getTime() <= now.getTime()) {
+      return res.status(422).json({ error: 'Deadline must be in the future (UTC)' });
     }
 
     updates.deadline = deadline;

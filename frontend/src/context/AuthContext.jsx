@@ -4,53 +4,28 @@ import { api } from '../services/api';
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    try {
-      const stored = localStorage.getItem('cp_user');
-      if (!stored) return null;
-      const parsed = JSON.parse(stored);
-      if (!parsed.role) {
-        parsed.role = parsed.is_admin ? 'admin' : 'contributor';
-      }
-      return parsed;
-    } catch {
-      localStorage.removeItem('cp_user');
-      return null;
-    }
-  });
+  const [user, setUser] = useState(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     let active = true;
 
     async function validateAndRefreshUser() {
-      const storedToken = localStorage.getItem('cp_token');
-      if (!storedToken) {
-        if (active) {
-          setReady(true);
-        }
-        return;
-      }
-
+      // Check if user has a valid session (token is in httpOnly cookie)
       try {
-        // Validate stored token and refresh user data from server via GET /users/me
+        // Always fetch fresh user data from server — never trust client-stored role/admin flags
         const userData = await api.getMe();
         if (!active) return;
         if (userData && userData.id) {
-          // Backend returns user data directly (not wrapped in { user: ... })
           setUser(userData);
-          localStorage.setItem('cp_user', JSON.stringify(userData));
         } else {
           setUser(null);
-          localStorage.removeItem('cp_user');
         }
       } catch (err) {
         if (!active) return;
-        // If token is invalid, expired, or user was deleted, silently log out
+        // If token is invalid, expired, or user was deleted, log out
         if (err.status === 401 || err.status === 404) {
           setUser(null);
-          localStorage.removeItem('cp_user');
-          localStorage.removeItem('cp_token');
         }
       } finally {
         if (active) {
@@ -67,12 +42,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = useCallback(async (userData) => {
-    const normalized = {
-      ...userData,
-      role: userData.role || (userData.is_admin ? 'admin' : 'contributor'),
-    };
-    setUser(normalized);
-    localStorage.setItem('cp_user', JSON.stringify(normalized));
+    setUser(userData);
     setReady(true);
   }, []);
 
@@ -80,16 +50,14 @@ export function AuthProvider({ children }) {
     try {
       await api.logout();
     } catch (_err) {
-      // Silently ignore logout errors
+      /* ignore */
     }
     setUser(null);
-    localStorage.removeItem('cp_user');
     setReady(true);
   }, []);
 
   const updateUser = useCallback((userData) => {
     setUser(userData);
-    localStorage.setItem('cp_user', JSON.stringify(userData));
   }, []);
 
   return (

@@ -281,97 +281,108 @@ export default function WithdrawalsSection({ campaign, milestones = [], user, to
             const canSubmit = ['pending', 'rejected'].includes(milestone.status);
             const isPendingReview = milestone.status === 'pending_review';
             return (
-            <div key={milestone.id} style={styles.card}>
-              <h3 style={styles.h3}>Request milestone release</h3>
-              <p style={styles.hint}>
-                {milestone.title} · {Number(milestone.release_percentage).toLocaleString()}% of
-                raised funds
-              </p>
-              <p style={{ ...styles.hint, fontWeight: 600, color: 'var(--color-text-secondary)' }}>
-                Status: {milestoneStatusLabel(milestone.status)}
-              </p>
-              {milestone.status === 'rejected' && milestone.review_note && (
-                <div className="alert alert--error" style={{ marginBottom: '0.55rem' }}>
-                  Rejection reason: {milestone.review_note}
-                </div>
-              )}
-              {isPendingReview && (
-                <div className="alert alert--info" style={{ marginBottom: '0.55rem' }}>
-                  Your evidence is under review. You will be notified when the platform approves or
-                  rejects this milestone.
-                </div>
-              )}
-              {milestone.review_note && milestone.status !== 'rejected' && (
-                <div className="alert alert--info" style={{ marginBottom: '0.55rem' }}>
-                  {milestone.review_note}
-                </div>
-              )}
-              <label className="label-strong" htmlFor={`milestone-evidence-file-${milestone.id}`}>
-                Upload evidence file
-              </label>
-              <input
-                id={`milestone-evidence-file-${milestone.id}`}
-                type="file"
-                accept="image/*,.pdf,.doc,.docx,.txt"
-                disabled={!canSubmit || uploadingMilestoneId === milestone.id}
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) uploadMilestoneFile(milestone.id, file);
-                  e.target.value = '';
-                }}
-                style={{ marginBottom: '0.65rem' }}
-              />
-              <label className="label-strong" htmlFor={`milestone-evidence-${milestone.id}`}>
-                Evidence URL
-              </label>
-              <input
-                id={`milestone-evidence-${milestone.id}`}
-                value={milestoneForms[milestone.id]?.evidence_url || ''}
-                onChange={(e) => setMilestoneField(milestone.id, 'evidence_url', e.target.value)}
-                placeholder="https:// or upload a file above"
-                disabled={!canSubmit}
-                style={{ marginBottom: '0.65rem' }}
-              />
-              <label className="label-strong" htmlFor={`milestone-description-${milestone.id}`}>
-                Evidence description
-              </label>
-              <textarea
-                id={`milestone-description-${milestone.id}`}
-                value={milestoneForms[milestone.id]?.evidence_description || ''}
-                onChange={(e) => setMilestoneField(milestone.id, 'evidence_description', e.target.value)}
-                placeholder="Describe what you delivered (demo link summary, deliverable notes, etc.)"
-                rows={3}
-                disabled={!canSubmit}
-                style={{ marginBottom: '0.65rem', resize: 'vertical', fontFamily: 'inherit' }}
-              />
-              <label className="label-strong" htmlFor={`milestone-destination-${milestone.id}`}>
-                Destination address
-              </label>
-              <input
-                id={`milestone-destination-${milestone.id}`}
-                value={milestoneForms[milestone.id]?.destination_key || ''}
-                onChange={(e) => setMilestoneField(milestone.id, 'destination_key', e.target.value)}
-                placeholder="G..."
-                disabled={!canSubmit}
-                style={{ marginBottom: '0.65rem' }}
-              />
-              <button
-                type="button"
-                className="btn-primary"
-                disabled={busyId === `milestone-${milestone.id}` || milestone.status === 'released'}
-                onClick={() => requestMilestoneRelease(milestone.id)}
-                style={{ width: '100%' }}
-              >
-                {busyId === `milestone-${milestone.id}`
-                  ? 'Submitting…'
-                  : uploadingMilestoneId === milestone.id
-                  ? 'Uploading…'
-                  : isPendingReview
-                  ? 'Awaiting review'
-                  : 'Submit evidence for review'}
-              </button>
-            </div>
-          );
+              <div key={milestone.id} style={styles.card}>
+                <h3 style={styles.h3}>Request milestone release</h3>
+                <p style={styles.hint}>
+                  {milestone.title} · {Number(milestone.release_percentage).toLocaleString()}% of
+                  raised funds
+                </p>
+                <p
+                  style={{ ...styles.hint, fontWeight: 600, color: 'var(--color-text-secondary)' }}
+                >
+                  Status: {milestoneStatusLabel(milestone.status)}
+                </p>
+                {milestone.status === 'rejected' && milestone.review_note && (
+                  <div className="alert alert--error" style={{ marginBottom: '0.55rem' }}>
+                    Rejection reason: {milestone.review_note}
+                  </div>
+                )}
+                {isPendingReview && (
+                  <div className="alert alert--info" style={{ marginBottom: '0.55rem' }}>
+                    Your evidence is under review. You will be notified when the platform approves
+                    or rejects this milestone.
+                  </div>
+                )}
+                {milestone.review_note && milestone.status !== 'rejected' && (
+                  <div className="alert alert--info" style={{ marginBottom: '0.55rem' }}>
+                    {milestone.review_note}
+                  </div>
+                )}
+                <label className="label-strong" htmlFor={`milestone-evidence-file-${milestone.id}`}>
+                  Upload evidence file
+                </label>
+                <input
+                  id={`milestone-evidence-file-${milestone.id}`}
+                  type="file"
+                  accept="image/*,.pdf,.doc,.docx,.txt"
+                  disabled={!canSubmit || uploadingMilestoneId === milestone.id}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) uploadMilestoneFile(milestone.id, file);
+                    e.target.value = '';
+                  }}
+                  style={{ marginBottom: '0.65rem' }}
+                />
+                <label className="label-strong" htmlFor={`milestone-evidence-${milestone.id}`}>
+                  Evidence URL
+                </label>
+                <input
+                  id={`milestone-evidence-${milestone.id}`}
+                  value={milestoneForms[milestone.id]?.evidence_url || ''}
+                  onChange={(e) => setMilestoneField(milestone.id, 'evidence_url', e.target.value)}
+                  placeholder="https:// or upload a file above"
+                  disabled={!canSubmit}
+                  style={{ marginBottom: '0.65rem' }}
+                />
+                <label className="label-strong" htmlFor={`milestone-description-${milestone.id}`}>
+                  Evidence description
+                </label>
+                <textarea
+                  id={`milestone-description-${milestone.id}`}
+                  value={milestoneForms[milestone.id]?.evidence_description || ''}
+                  onChange={(e) =>
+                    setMilestoneField(milestone.id, 'evidence_description', e.target.value)
+                  }
+                  placeholder="Describe what you delivered (demo link summary, deliverable notes, etc.)"
+                  rows={3}
+                  disabled={!canSubmit}
+                  style={{ marginBottom: '0.65rem', resize: 'vertical', fontFamily: 'inherit' }}
+                />
+                <label className="label-strong" htmlFor={`milestone-destination-${milestone.id}`}>
+                  Destination address
+                </label>
+                <input
+                  id={`milestone-destination-${milestone.id}`}
+                  value={milestoneForms[milestone.id]?.destination_key || ''}
+                  onChange={(e) =>
+                    setMilestoneField(milestone.id, 'destination_key', e.target.value)
+                  }
+                  placeholder="G..."
+                  disabled={!canSubmit}
+                  style={{ marginBottom: '0.65rem' }}
+                />
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={
+                    !canSubmit ||
+                    busyId === `milestone-${milestone.id}` ||
+                    uploadingMilestoneId === milestone.id ||
+                    milestone.status === 'released'
+                  }
+                  onClick={() => requestMilestoneRelease(milestone.id)}
+                  style={{ width: '100%' }}
+                >
+                  {busyId === `milestone-${milestone.id}`
+                    ? 'Submitting…'
+                    : uploadingMilestoneId === milestone.id
+                      ? 'Uploading…'
+                      : isPendingReview
+                        ? 'Awaiting review'
+                        : 'Submit evidence for review'}
+                </button>
+              </div>
+            );
           })}
         </div>
       )}
@@ -634,6 +645,13 @@ export default function WithdrawalsSection({ campaign, milestones = [], user, to
                         type="button"
                         className="btn-primary"
                         disabled={busyId === row.id}
+                        onClick={() =>
+                          runAction(
+                            row.id,
+                            () => api.approveWithdrawalCreator(row.id),
+                            'Withdrawal signed'
+                          )
+                        }
                         style={{ fontSize: '0.8rem' }}
                         onClick={() => setConfirmingSignId(row.id)}
                       >

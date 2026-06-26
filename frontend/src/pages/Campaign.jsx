@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Link, useParams, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -10,11 +10,9 @@ import MilestoneTracker from '../components/MilestoneTracker';
 import WithdrawalsSection from '../components/WithdrawalsSection';
 import CampaignDetailSkeleton from '../components/skeletons/CampaignDetailSkeleton';
 import ContributionListSkeleton from '../components/skeletons/ContributionListSkeleton';
-import MilestonesSkeletonLoader from '../components/skeletons/MilestonesSkeletonLoader';
-import AnalyticsSkeletonLoader from '../components/skeletons/AnalyticsSkeletonLoader';
 import VerificationBadge from '../components/VerificationBadge';
 import CampaignStatusBadge from '../components/CampaignStatusBadge';
-import { stellarExpertTxUrl, stellarExpertContractUrl } from '../config/stellar';
+import { stellarExpertTxUrl } from '../config/stellar';
 import CampaignQRCode from '../components/CampaignQRCode';
 import { getNetwork, signTransaction } from '@stellar/freighter-api';
 import { isConnected, getPublicKey } from '@stellar/freighter-api';
@@ -145,11 +143,6 @@ export default function Campaign() {
   const [coverUploadError, setCoverUploadError] = useState(location.state?.coverUploadError || '');
   const [updates, setUpdates] = useState([]);
   const [milestones, setMilestones] = useState([]);
-  const [milestonesLoading, setMilestonesLoading] = useState(true);
-  const [analyticsLoading, setAnalyticsLoading] = useState(false);
-  const [contractStatus, setContractStatus] = useState(null);
-  const [contractStatusError, setContractStatusError] = useState('');
-  const [tiers, setTiers] = useState([]);
   const [updateForm, setUpdateForm] = useState({ title: '', body: '' });
   const [updateBusy, setUpdateBusy] = useState(false);
   const [updatesError, setUpdatesError] = useState('');
@@ -160,6 +153,7 @@ export default function Campaign() {
   const [inviteError, setInviteError] = useState('');
   const [inviteSuccess, setInviteSuccess] = useState(false);
   const [showQR, setShowQR] = useState(false);
+  const [showEmbedSection, setShowEmbedSection] = useState(false);
   const [embedCopied, setEmbedCopied] = useState(false);
   const [badgeCopied, setBadgeCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -179,9 +173,6 @@ export default function Campaign() {
   const [refundBusy, setRefundBusy] = useState(false);
   const [refundError, setRefundError] = useState('');
   const [refundSuccess, setRefundSuccess] = useState('');
-  const [contributorRefundBusy, setContributorRefundBusy] = useState(false);
-  const [contributorRefundError, setContributorRefundError] = useState('');
-  const [contributorRefundSuccess, setContributorRefundSuccess] = useState('');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -239,7 +230,6 @@ export default function Campaign() {
           setMembers([]);
         }
         if (role === 'owner' || role === 'manager' || role === 'viewer') {
-          setAnalyticsLoading(true);
           api
             .getCampaignAnalytics(id)
             .then(setAnalytics)
@@ -297,6 +287,19 @@ export default function Campaign() {
         .catch(() => setHasPendingWithdrawal(false));
     }
   }, [id, token, contributed, showAll]);
+
+  useEffect(() => {
+    if (!campaign || !id || !user) return;
+    const currentUserId = user.id || user.userId;
+    const resolvedRole =
+      campaign.user_role ||
+      (currentUserId && String(campaign.creator_id) === String(currentUserId) ? 'owner' : null);
+    if (resolvedRole !== 'owner') return;
+    api
+      .getReferralLeaderboard(id)
+      .then(setReferralLeaderboard)
+      .catch(() => {});
+  }, [campaign, id, user]);
 
   useEffect(() => {
     if (!id) return;
@@ -412,7 +415,7 @@ export default function Campaign() {
 
   async function handleClone() {
     try {
-      const data = await api.getCloneData(id, token);
+      const data = await api.getCloneData(id);
       navigate('/campaigns/new', { state: { prefill: data } });
     } catch (err) {
       window.alert(err.message || 'Failed to fetch campaign clone data');
@@ -447,17 +450,17 @@ export default function Campaign() {
         prev.map((m) => (m.user_id === userId ? { ...m, role: updated.role } : m))
       );
     } catch (err) {
-      window.alert(err.message || 'Failed to update role');
+      alert(err.message || 'Failed to update role');
     }
   }
 
   async function handleRemoveMember(userId) {
-    if (!window.confirm('Are you sure you want to remove this member?')) return;
+    if (!confirm('Are you sure you want to remove this member?')) return;
     try {
       await api.removeCampaignMember(id, userId);
       setMembers((prev) => prev.filter((m) => m.user_id !== userId));
     } catch (err) {
-      window.alert(err.message || 'Failed to remove member');
+      alert(err.message || 'Failed to remove member');
     }
   }
 
@@ -466,17 +469,17 @@ export default function Campaign() {
       const updated = await api.resendCampaignInvite(id, memberId);
       setMembers((prev) => prev.map((m) => (m.id === memberId ? { ...m, ...updated } : m)));
     } catch (err) {
-      window.alert(err.message || 'Failed to resend invitation');
+      alert(err.message || 'Failed to resend invitation');
     }
   }
 
   async function handleCancelInvite(memberId) {
-    if (!window.confirm('Cancel this pending invitation?')) return;
+    if (!confirm('Cancel this pending invitation?')) return;
     try {
       await api.cancelCampaignInvite(id, memberId);
       setMembers((prev) => prev.filter((m) => m.id !== memberId));
     } catch (err) {
-      window.alert(err.message || 'Failed to cancel invitation');
+      alert(err.message || 'Failed to cancel invitation');
     }
   }
 
@@ -716,18 +719,6 @@ export default function Campaign() {
     ['active', 'funded'].includes(campaign.status);
   const canViewAnalytics = userRole === 'owner' || userRole === 'manager' || userRole === 'viewer';
   const isOwner = userRole === 'owner';
-  const contractAddress = campaign.contract_address || campaign.escrow_contract_id || null;
-  const onChainFailed = contractStatus?.status === 'failed' || campaign.status === 'failed';
-  const userContribution = contributions?.find(
-    (c) => c.sender_public_key === user?.wallet_public_key
-  );
-  const canRequestOnChainRefund =
-    user &&
-    !isOwner &&
-    contractAddress &&
-    onChainFailed &&
-    userContribution &&
-    !userContribution.contract_refunded_at;
   const acceptedMembers = members.filter((m) => m.accepted_at);
   const pendingInvites = members.filter((m) => !m.accepted_at);
   const campaignUrl = `${window.location.origin}/campaigns/${id}`;
@@ -753,8 +744,19 @@ export default function Campaign() {
   }
 
   async function handleFreighterContribute() {
-    setFreighterGuestMode(true);
-    setShowModal(true);
+    try {
+      const connected = await isConnected()
+        .then((r) => r?.isConnected ?? r)
+        .catch(() => false);
+      if (!connected) {
+        window.open('https://www.freighter.app/', '_blank', 'noopener,noreferrer');
+        return;
+      }
+      setFreighterGuestMode(true);
+      setShowModal(true);
+    } catch {
+      window.open('https://www.freighter.app/', '_blank', 'noopener,noreferrer');
+    }
   }
 
 
@@ -790,7 +792,7 @@ export default function Campaign() {
   }
 
   async function deleteUpdate(updateId) {
-    if (!window.confirm('Delete this campaign update?')) return;
+    if (!confirm('Delete this campaign update?')) return;
 
     setUpdatesError('');
     try {
@@ -904,60 +906,6 @@ export default function Campaign() {
           </button>
         </div>
       )}
-      {canRequestOnChainRefund && (
-        <div
-          style={{
-            background: 'var(--color-bg-card, #1e1e2f)',
-            border: '1px solid var(--color-border-light)',
-            borderRadius: '10px',
-            padding: '1.1rem 1.25rem',
-            marginBottom: '1.25rem',
-          }}
-        >
-          <p
-            style={{
-              margin: '0 0 0.75rem',
-              fontSize: '0.9rem',
-              color: 'var(--color-text-secondary)',
-              lineHeight: 1.55,
-            }}
-          >
-            This campaign failed on-chain. You can claim a refund for your contribution directly
-            from the escrow contract.
-          </p>
-          {contributorRefundError && (
-            <p
-              className="alert alert--error"
-              style={{ marginBottom: '0.75rem', fontSize: '0.875rem' }}
-              role="alert"
-            >
-              {contributorRefundError}
-            </p>
-          )}
-          {contributorRefundSuccess && (
-            <p
-              className="alert alert--success"
-              style={{ marginBottom: '0.75rem', fontSize: '0.875rem' }}
-              role="status"
-            >
-              {contributorRefundSuccess}
-            </p>
-          )}
-          <button
-            type="button"
-            className="btn-primary"
-            disabled={contributorRefundBusy}
-            onClick={() => handleContributorRefund(userContribution.id)}
-            style={{
-              background: contributorRefundBusy ? undefined : '#dc2626',
-              borderColor: contributorRefundBusy ? undefined : '#dc2626',
-              fontSize: '0.9rem',
-            }}
-          >
-            {contributorRefundBusy ? 'Processing refund…' : 'Refund available'}
-          </button>
-        </div>
-      )}
       {campaign.creator_kyc_status !== 'verified' && (
         <div className="alert alert--warning" style={{ marginBottom: '1.25rem' }} role="status">
           <strong>Legacy campaign:</strong> this campaign was created before creator identity
@@ -1002,24 +950,6 @@ export default function Campaign() {
           )}
         </div>
         <h1 style={styles.title}>{campaign.title}</h1>
-        {contractAddress && (
-          <p style={{ margin: '0.35rem 0 0', fontSize: '0.82rem', color: 'var(--color-text-secondary)' }}>
-            Contract:{' '}
-            <a
-              href={stellarExpertContractUrl(contractAddress)}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: 'var(--color-accent)', fontWeight: 600, fontFamily: 'monospace' }}
-            >
-              {contractAddress.slice(0, 6)}…{contractAddress.slice(-6)} ↗
-            </a>
-          </p>
-        )}
-        {contractStatusError && (
-          <p className="alert alert--warning" style={{ marginTop: '0.5rem', fontSize: '0.82rem' }} role="status">
-            {contractStatusError}
-          </p>
-        )}
         {campaign.creator_name && <p style={styles.creator}>by {campaign.creator_name}</p>}
         <p style={styles.desc}>{campaign.description}</p>
       </div>
@@ -1213,11 +1143,12 @@ export default function Campaign() {
           }}
           onClick={() => {
             const shareUrl = referralUrl || window.location.href;
-            const text = encodeURIComponent(
-              `I just backed ${campaign.title} on CrowdPay — ${pct}% funded with ${campaign.contributor_count || 0} backers. Join me: ${shareUrl}`
-            );
+            const pct = Math.min(100, (campaign.raised_amount / campaign.target_amount) * 100).toFixed(1);
+            const daysLeft = Math.max(0, Math.ceil((new Date(campaign.end_date) - new Date()) / (1000 * 60 * 60 * 24)));
+            const text = encodeURIComponent(`Back ${campaign.title} on CrowdPay — ${pct}% funded, ${daysLeft} days left. Built on Stellar. ${shareUrl} #Stellar #CrowdPay`);
             window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank');
           }}
+          aria-label="Share on X"
         >
           Share on X
         </button>
@@ -1234,13 +1165,33 @@ export default function Campaign() {
           }}
           onClick={() => {
             const shareUrl = referralUrl || window.location.href;
-            const text = encodeURIComponent(
-              `I just backed ${campaign.title} on CrowdPay — ${pct}% funded with ${campaign.contributor_count || 0} backers. Join me: ${shareUrl}`
-            );
+            const pct = Math.min(100, (campaign.raised_amount / campaign.target_amount) * 100).toFixed(1);
+            const text = encodeURIComponent(`Hey! Check out this campaign on CrowdPay: ${campaign.title}. They're ${pct}% funded and need your help. ${shareUrl}`);
             window.open(`https://wa.me/?text=${text}`, '_blank');
           }}
+          aria-label="Share on WhatsApp"
         >
           WhatsApp
+        </button>
+        <button
+          type="button"
+          className="btn-secondary"
+          style={{
+            flex: 1,
+            fontSize: '0.85rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.5rem',
+          }}
+          onClick={() => {
+            const shareUrl = referralUrl || window.location.href;
+            const linkedInUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`;
+            window.open(linkedInUrl, '_blank');
+          }}
+          aria-label="Share on LinkedIn"
+        >
+          LinkedIn
         </button>
         <div style={{ position: 'relative', flex: 1 }}>
           <button
@@ -1340,7 +1291,7 @@ export default function Campaign() {
 
       <details style={{ ...styles.card, marginTop: '-0.75rem' }}>
         <summary style={styles.embedSummary}>Embed on your site</summary>
-        <pre style={{ ...styles.embedCode, marginTop: '0.75rem' }}>{widgetEmbedCode}</pre>
+        <pre style={{ ...styles.embedCode, marginTop: '0.75rem' }}>{embedCode}</pre>
         <button
           type="button"
           onClick={() => {
@@ -1439,9 +1390,7 @@ export default function Campaign() {
                   Compact widget (iframe)
                 </label>
                 <div style={{ position: 'relative' }}>
-                  <pre style={styles.embedCode}>
-                    {`<iframe src="${window.location.origin}/embed/campaigns/${campaign.id}" \n        width="480" height="280" frameborder="0">\n</iframe>`}
-                  </pre>
+                  <pre style={styles.embedCode}>{widgetEmbedCode}</pre>
                   <button
                     type="button"
                     onClick={() => {
@@ -1603,15 +1552,7 @@ export default function Campaign() {
         isCreator={!!(user?.id && campaign.creator_id === user.id)}
       />
 
-      {milestonesLoading ? (
-        <MilestonesSkeletonLoader />
-      ) : (
-        <MilestoneTracker
-          milestones={milestones}
-          assetType={campaign.asset_type}
-          contractMilestones={contractStatus?.milestones}
-        />
-      )}
+      <MilestoneTracker milestones={milestones} assetType={campaign.asset_type} />
       {canManageTeam && (
         <div style={{ marginBottom: '2rem' }} data-no-print>
           <div
@@ -2018,10 +1959,7 @@ export default function Campaign() {
       ))}
 
       {/* Analytics Section */}
-      {canViewAnalytics && analyticsLoading && (canManageTeam ? activeTab === 'analytics' : true) && (
-        <AnalyticsSkeletonLoader />
-      )}
-      {canViewAnalytics && !analyticsLoading && analytics && (canManageTeam ? activeTab === 'analytics' : true) && (
+      {canViewAnalytics && analytics && (canManageTeam ? activeTab === 'analytics' : true) && (
         <div style={{ marginBottom: '2rem' }}>
           <h2 style={styles.sectionTitle}>Analytics</h2>
           {!analytics.dailyTotals || analytics.dailyTotals.length === 0 ? (
@@ -2157,6 +2095,7 @@ export default function Campaign() {
           </span>
         )}
       </h2>
+
       {contributions === null ? (
         <ContributionListSkeleton />
       ) : contributions.length === 0 ? (
@@ -2180,14 +2119,24 @@ export default function Campaign() {
             ))}
           </div>
           {totalContributions > 10 && (
-            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'center',
+                marginTop: '1rem',
+              }}
+            >
               <button
                 type="button"
                 className="btn-secondary"
                 onClick={() => setShowAll((prev) => !prev)}
-                style={{ padding: '0.5rem 1.5rem', fontSize: '0.9rem', cursor: 'pointer' }}
+                style={{
+                  padding: '0.5rem 1.5rem',
+                  fontSize: '0.9rem',
+                  cursor: 'pointer',
+                }}
               >
-                {showAll ? 'Show less' : 'Show all'}
+                {showAll ? 'Show less' : `Show all (${totalContributions})`}
               </button>
             </div>
           )}
@@ -2643,5 +2592,65 @@ const styles = {
     borderRadius: '50%',
     background: '#16a34a',
     animation: 'pulse 1.5s ease-in-out infinite',
+  },
+
+  embedCode: {
+    background: 'var(--color-surface)',
+    border: '1px solid var(--color-border-light)',
+    borderRadius: '6px',
+    padding: '0.75rem',
+    fontSize: '0.75rem',
+    fontFamily: 'monospace',
+    color: 'var(--color-text-primary)',
+    overflow: 'auto',
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-all',
+    paddingRight: '5rem',
+  },
+  embedSummary: {
+    cursor: 'pointer',
+    fontSize: '0.85rem',
+    color: 'var(--color-accent)',
+    fontWeight: 600,
+  },
+  embedPreview: {
+    background: 'var(--color-surface)',
+    border: '1px solid var(--color-border-light)',
+    borderRadius: '6px',
+    padding: '0.75rem',
+  },
+  emptyBackers: {
+    padding: '2.5rem 1rem',
+    textAlign: 'center',
+    background: 'var(--color-accent-lightest)',
+    border: '2px dashed var(--color-accent-lighter)',
+    borderRadius: '12px',
+    color: 'var(--color-accent)',
+    fontWeight: 700,
+  },
+  avatar: {
+    width: '36px',
+    height: '36px',
+    borderRadius: '50%',
+    background: 'var(--color-accent-lightest)',
+    color: 'var(--color-accent)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '0.9rem',
+    fontWeight: 800,
+    flexShrink: 0,
+  },
+  tabs: {
+    display: 'flex',
+    gap: '0.75rem',
+    marginBottom: '1rem',
+    borderBottom: '1px solid var(--color-border-light)',
+    paddingBottom: '0.75rem',
+  },
+  tabButton: {
+    flex: 1,
+    fontSize: '0.9rem',
+    justifyContent: 'center',
   },
 };

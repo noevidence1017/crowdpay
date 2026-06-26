@@ -53,7 +53,6 @@ export default function CreateCampaign() {
   const { user, ready, updateUser } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const token = localStorage.getItem('cp_token');
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
     title: location.state?.prefill?.title || '',
@@ -63,9 +62,10 @@ export default function CreateCampaign() {
     deadline: '',
     min_contribution: location.state?.prefill?.min_contribution || '',
     max_contribution: location.state?.prefill?.max_contribution || '',
-    max_per_user: '',
+    max_per_user: location.state?.prefill?.max_per_user || '',
     show_backer_amounts: location.state?.prefill?.show_backer_amounts ?? true,
     milestones: [],
+    max_per_user: '',
     category: '',
   });
   const [coverImageFile, setCoverImageFile] = useState(null);
@@ -233,9 +233,13 @@ export default function CreateCampaign() {
   }
 
   function validateStep2() {
-    if (form.deadline && form.deadline < today) {
-      setError('Deadline must be today or in the future.');
-      return false;
+    if (form.deadline) {
+      const deadlineDate = new Date(form.deadline);
+      const now = new Date();
+      if (deadlineDate.getTime() <= now.getTime()) {
+        setError('Deadline must be today or in the future (UTC).');
+        return false;
+      }
     }
     if (form.min_contribution && Number(form.min_contribution) <= 0) {
       setError('Minimum contribution must be greater than zero.');
@@ -312,12 +316,20 @@ export default function CreateCampaign() {
     setLoading(true);
     setError('');
     try {
+      let formattedDeadline = undefined;
+      if (form.deadline) {
+        // Convert YYYY-MM-DD date string to ISO 8601 with UTC (Z suffix)
+        const [year, month, day] = form.deadline.split('-').map(Number);
+        const deadlineDate = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+        formattedDeadline = deadlineDate.toISOString();
+      }
+
       const campaign = await api.createCampaign({
         title: form.title.trim(),
         description: form.description.trim() || undefined,
         target_amount: form.target_amount,
         asset_type: form.asset_type,
-        deadline: form.deadline || undefined,
+        deadline: formattedDeadline,
         category: form.category || undefined,
         min_contribution: form.min_contribution ? Number(form.min_contribution) : undefined,
         max_contribution: form.max_contribution ? Number(form.max_contribution) : undefined,

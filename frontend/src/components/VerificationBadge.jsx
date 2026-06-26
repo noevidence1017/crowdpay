@@ -1,7 +1,15 @@
 export default function VerificationBadge({ status, compact = false }) {
   if (status === 'verified') {
+    return <span style={compact ? styles.verifiedCompact : styles.verified}>✓ Verified</span>;
+  }
+  if (status === 'pending') {
     return (
-      <span style={compact ? styles.verifiedCompact : styles.verified}>✓ Verified Creator</span>
+      <span style={compact ? styles.pendingCompact : styles.pending}>Pending verification</span>
+    );
+  }
+  if (status === 'rejected') {
+    return (
+      <span style={compact ? styles.rejectedCompact : styles.rejected}>Verification rejected</span>
     );
   }
 

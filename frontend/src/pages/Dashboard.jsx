@@ -188,15 +188,22 @@ export default function Dashboard() {
           updateUser(me);
           setStats(s);
           setCampaigns(c);
-          api.getUserDashboardAnalytics().then(setDashAnalytics).catch(() => {});
-        })
-        .catch((err) => setError(err.message || 'Could not load dashboard'))
-        .finally(() => setLoadingCampaigns(false));
-      return;
-    }
-
-    setLoadingCampaigns(false);
-  }, [isCreator, updateUser]);
+          setContributions(contrib);
+          // pre-fetch dashboard analytics for the analytics tab
+          api
+            .getUserDashboardAnalytics()
+            .then(setDashAnalytics)
+            .catch(() => {});
+        } else {
+          setContributions(results[0]);
+        }
+      })
+      .catch((err) => setError(err.message || 'Could not load dashboard'))
+      .finally(() => {
+        setLoadingCampaigns(false);
+        setLoadingContributions(false);
+      });
+  }, [user?.role, updateUser]);
 
   const loadCampaignAnalytics = useCallback((id) => {
     setSelectedCampaignId(id);
@@ -249,11 +256,14 @@ export default function Dashboard() {
           if (status.status === 'verified' || status.status === 'rejected') {
             const me = await api.getMe();
             updateUser(me);
-            setSearchParams((params) => {
-              params.delete('kyc');
-              params.delete('reference');
-              return params;
-            }, { replace: true });
+            setSearchParams(
+              (params) => {
+                params.delete('kyc');
+                params.delete('reference');
+                return params;
+              },
+              { replace: true }
+            );
             break;
           }
         } catch {
@@ -292,7 +302,7 @@ export default function Dashboard() {
   }
   if (!user) return <Navigate to="/login" replace />;
 
-  const loading = activeTab === 'campaigns' ? loadingCampaigns : false;
+  const loading = activeTab === 'campaigns' ? loadingCampaigns : loadingContributions;
   const visibleTabs = isCreator ? TABS : TABS.filter((t) => t.id !== 'analytics');
 
   return (
@@ -798,6 +808,7 @@ export default function Dashboard() {
           </div>
         </section>
       )}
+
       {activeTab === 'referrals' && isCreator && (
         <section role="tabpanel" aria-labelledby="tab-referrals">
           {referralLoading ? (

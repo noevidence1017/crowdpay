@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../services/api';
 
 export default function KycPrompt({
-  token,
   onUserUpdate,
   title = 'Verify your identity to create campaigns',
 }) {

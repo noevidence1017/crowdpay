@@ -54,8 +54,9 @@ impl EscrowContract {
         from.require_auth();
 
         let deadline: u64 = env.storage().instance().get(&DataKey::Deadline).unwrap();
-        if env.ledger().timestamp() >= deadline {
-            panic!("Deadline has passed");
+        let current_time = env.ledger().timestamp();
+        if current_time > deadline {
+            panic!("Campaign deadline has passed");
         }
 
         let asset: Address = env.storage().instance().get(&DataKey::Asset).unwrap();

@@ -114,12 +114,14 @@ const createCampaignValidation = [
   body('deadline')
     .optional({ nullable: true, checkFalsy: true })
     .isISO8601()
-    .withMessage('Deadline must be a valid date')
+    .withMessage('Deadline must be a valid ISO 8601 date (preferably with Z suffix for UTC)')
     .custom((value) => {
+      // Treat deadline as UTC
       const deadline = new Date(value);
       const now = new Date();
-      if (deadline <= now) {
-        throw new Error('Deadline must be in the future');
+      // Convert both to UTC timestamps for comparison
+      if (deadline.getTime() <= now.getTime()) {
+        throw new Error('Deadline must be in the future (UTC)');
       }
       return true;
     }),

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { api } from '../services/api';
 import { stellarExpertAccountUrl } from '../config/stellar';
 import VerificationBadge from '../components/VerificationBadge';
 import KycPrompt from '../components/KycPrompt';
@@ -150,7 +149,16 @@ export default function Profile() {
       </div>
 
       <div className="campaign-card" style={{ marginBottom: '2rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '0.75rem' }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            gap: '0.75rem',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            marginBottom: '0.75rem',
+          }}
+        >
           <h2 style={{ fontSize: '1.15rem', fontWeight: 700, margin: 0 }}>Identity verification</h2>
           <VerificationBadge status={kycStatus} />
         </div>
@@ -158,7 +166,10 @@ export default function Profile() {
         {kycStatus === 'verified' && (
           <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', margin: 0 }}>
             Your identity is verified
-            {user.kyc_completed_at ? ` as of ${new Date(user.kyc_completed_at).toLocaleDateString()}` : ''}.
+            {user.kyc_completed_at
+              ? ` as of ${new Date(user.kyc_completed_at).toLocaleDateString()}`
+              : ''}
+            .
           </p>
         )}
 

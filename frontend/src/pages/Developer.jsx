@@ -214,7 +214,7 @@ export default function Developer() {
     setNewKeyScopes((cur) => (cur.includes(sc) ? cur.filter((x) => x !== sc) : [...cur, sc]));
   }
 
-  const selectedEndpoint = v1Endpoints.find((e) => e.id === explorerEndpoint) || v1Endpoints[0];
+  const selectedEndpoint = V1_ENDPOINTS.find((e) => e.id === explorerEndpoint) || V1_ENDPOINTS[0];
 
   function buildExplorerUrl() {
     if (!selectedEndpoint) return '';
@@ -322,138 +322,100 @@ export default function Developer() {
         <p style={{ fontSize: '0.9rem', color: 'var(--color-text-hint)', marginBottom: '1rem' }}>
           Try public API v1 endpoints with your API key. Rate limit: 100 requests/minute per key.
         </p>
-
-        {v1Endpoints.length === 0 ? (
-          <p style={{ color: 'var(--color-text-hint)', fontSize: '0.85rem' }}>Loading endpoints from spec...</p>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '2rem' }}>
-            <form
-              onSubmit={runExplorerRequest}
-              style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxWidth: '640px' }}
+        <form
+          onSubmit={runExplorerRequest}
+          style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxWidth: '640px' }}
+        >
+          <label style={{ fontSize: '0.85rem' }}>
+            Endpoint
+            <select
+              value={explorerEndpoint}
+              onChange={(e) => setExplorerEndpoint(e.target.value)}
+              style={{ display: 'block', width: '100%', marginTop: '0.35rem' }}
             >
-              <label style={{ fontSize: '0.85rem' }}>
-                Endpoint
-                <select
-                  value={explorerEndpoint}
-                  onChange={(e) => setExplorerEndpoint(e.target.value)}
-                  style={{ display: 'block', width: '100%', marginTop: '0.35rem' }}
-                >
-                  {v1Endpoints.map((ep) => (
-                    <option key={ep.id} value={ep.id}>
-                      {ep.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              
-              <label style={{ fontSize: '0.85rem' }}>
-                API key {selectedEndpoint?.auth ? '(required)' : '(optional)'}
-                <input
-                  type="password"
-                  value={explorerApiKey}
-                  onChange={(e) => setExplorerApiKey(e.target.value)}
-                  placeholder="cpk_…"
-                  style={{ display: 'block', width: '100%', marginTop: '0.35rem' }}
-                />
-              </label>
-
-              {(selectedEndpoint?.pathFields || []).map((field) => (
-                <label key={field} style={{ fontSize: '0.85rem' }}>
-                  {field}
-                  <input
-                    value={explorerPathParams[field] || ''}
-                    onChange={(e) =>
-                      setExplorerPathParams((cur) => ({ ...cur, [field]: e.target.value }))
-                    }
-                    style={{ display: 'block', width: '100%', marginTop: '0.35rem' }}
-                  />
-                </label>
+              {V1_ENDPOINTS.map((ep) => (
+                <option key={ep.id} value={ep.id}>
+                  {ep.label}
+                </option>
               ))}
-
-              {(selectedEndpoint?.queryFields || []).map((field) => (
-                <label key={field} style={{ fontSize: '0.85rem' }}>
-                  Query: {field}
-                  <input
-                    value={explorerQuery[field] || ''}
-                    onChange={(e) => setExplorerQuery((cur) => ({ ...cur, [field]: e.target.value }))}
-                    style={{ display: 'block', width: '100%', marginTop: '0.35rem' }}
-                  />
-                </label>
-              ))}
-
-              {selectedEndpoint?.bodyTemplate !== null && selectedEndpoint?.method !== 'GET' && (
-                <label style={{ fontSize: '0.85rem' }}>
-                  Request body (JSON)
-                  <textarea
-                    rows={5}
-                    value={explorerBody}
-                    onChange={(e) => setExplorerBody(e.target.value)}
-                    style={{
-                      display: 'block',
-                      width: '100%',
-                      marginTop: '0.35rem',
-                      fontFamily: 'monospace',
-                      fontSize: '0.85rem',
-                    }}
-                  />
-                </label>
-              )}
-
-              {selectedEndpoint && (
-                <div style={{ marginTop: '0.5rem', fontSize: '0.85rem' }}>
-                  <p style={{ fontWeight: 600, marginBottom: '0.25rem' }}>cURL equivalent:</p>
-                  <pre
-                    style={{
-                      padding: '0.75rem',
-                      background: 'var(--color-bg-alt)',
-                      border: '1px solid var(--color-border-lightest)',
-                      borderRadius: 6,
-                      overflowX: 'auto',
-                      whiteSpace: 'pre-wrap',
-                      wordBreak: 'break-all',
-                    }}
-                  >
-                    {getCurlCommand()}
-                  </pre>
-                </div>
-              )}
-
-              <button
-                type="submit"
-                className="btn-primary"
-                disabled={explorerBusy}
-                style={{ alignSelf: 'flex-start', padding: '0.5rem 1rem' }}
-              >
-                {explorerBusy ? 'Sending…' : 'Send request'}
-              </button>
-            </form>
-
-            <div>
-              {explorerError && (
-                <p style={{ color: 'var(--color-status-error)', marginTop: '0.75rem' }}>
-                  {explorerError}
-                </p>
-              )}
-              {explorerResponse && (
-                <div>
-                  <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.5rem' }}>Response</h3>
-                  <pre
-                    style={{
-                      padding: '0.85rem',
-                      background: 'var(--color-bg-alt)',
-                      border: '1px solid var(--color-border-light)',
-                      borderRadius: 8,
-                      overflow: 'auto',
-                      fontSize: '0.8rem',
-                      maxHeight: '400px'
-                    }}
-                  >
-                    {explorerResponse}
-                  </pre>
-                </div>
-              )}
-            </div>
-          </div>
+            </select>
+          </label>
+          <label style={{ fontSize: '0.85rem' }}>
+            API key {selectedEndpoint.auth ? '(required)' : '(optional)'}
+            <input
+              type="password"
+              value={explorerApiKey}
+              onChange={(e) => setExplorerApiKey(e.target.value)}
+              placeholder="cp_live_…"
+              style={{ display: 'block', width: '100%', marginTop: '0.35rem' }}
+            />
+          </label>
+          {(selectedEndpoint.pathFields || []).map((field) => (
+            <label key={field} style={{ fontSize: '0.85rem' }}>
+              {field}
+              <input
+                value={explorerPathParams[field] || ''}
+                onChange={(e) =>
+                  setExplorerPathParams((cur) => ({ ...cur, [field]: e.target.value }))
+                }
+                style={{ display: 'block', width: '100%', marginTop: '0.35rem' }}
+              />
+            </label>
+          ))}
+          {(selectedEndpoint.queryFields || []).map((field) => (
+            <label key={field} style={{ fontSize: '0.85rem' }}>
+              Query: {field}
+              <input
+                value={explorerQuery[field] || ''}
+                onChange={(e) => setExplorerQuery((cur) => ({ ...cur, [field]: e.target.value }))}
+                style={{ display: 'block', width: '100%', marginTop: '0.35rem' }}
+              />
+            </label>
+          ))}
+          {selectedEndpoint.bodyTemplate && (
+            <label style={{ fontSize: '0.85rem' }}>
+              Request body (JSON)
+              <textarea
+                rows={5}
+                value={explorerBody}
+                onChange={(e) => setExplorerBody(e.target.value)}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  marginTop: '0.35rem',
+                  fontFamily: 'monospace',
+                  fontSize: '0.85rem',
+                }}
+              />
+            </label>
+          )}
+          <button
+            type="submit"
+            className="btn-primary"
+            disabled={explorerBusy}
+            style={{ alignSelf: 'flex-start', padding: '0.5rem 1rem' }}
+          >
+            {explorerBusy ? 'Sending…' : 'Send request'}
+          </button>
+        </form>
+        {explorerError && (
+          <p style={{ color: 'var(--color-status-error)', marginTop: '0.75rem' }}>
+            {explorerError}
+          </p>
+        )}
+        {explorerResponse && (
+          <pre
+            style={{
+              marginTop: '1rem',
+              padding: '0.85rem',
+              background: 'var(--color-border-lightest)',
+              borderRadius: 8,
+              overflow: 'auto',
+              fontSize: '0.8rem',
+            }}
+          >
+            {explorerResponse}
+          </pre>
         )}
       </section>
 

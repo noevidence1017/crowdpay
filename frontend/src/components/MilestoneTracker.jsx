@@ -3,6 +3,14 @@ function statusTone(status) {
     return { bg: 'var(--color-success-bg)', fg: 'var(--color-success-text)', label: 'Released' };
   if (status === 'approved')
     return { bg: 'var(--color-info-bg)', fg: 'var(--color-info-text)', label: 'Approved' };
+  if (status === 'pending_review')
+    return {
+      bg: 'var(--color-warning-bg)',
+      fg: 'var(--color-warning-text)',
+      label: 'Awaiting review',
+    };
+  if (status === 'rejected')
+    return { bg: 'var(--color-error-bg)', fg: 'var(--color-error-text)', label: 'Rejected' };
   return { bg: 'var(--color-surface)', fg: 'var(--color-text-secondary)', label: 'Pending' };
 }
 
@@ -144,7 +152,26 @@ export default function MilestoneTracker({ milestones, assetType, contractMilest
                   </a>
                 </div>
               )}
-              {milestone.review_note && (
+              {milestone.evidence_description && (
+                <div
+                  style={{
+                    marginTop: '0.45rem',
+                    fontSize: '0.84rem',
+                    color: 'var(--color-text-secondary)',
+                  }}
+                >
+                  {milestone.evidence_description}
+                </div>
+              )}
+              {milestone.review_note && milestone.status === 'rejected' && (
+                <div
+                  className="alert alert--error"
+                  style={{ marginTop: '0.55rem', fontSize: '0.82rem' }}
+                >
+                  Rejection reason: {milestone.review_note}
+                </div>
+              )}
+              {milestone.review_note && milestone.status !== 'rejected' && (
                 <div
                   className="alert alert--info"
                   style={{ marginTop: '0.55rem', fontSize: '0.82rem' }}

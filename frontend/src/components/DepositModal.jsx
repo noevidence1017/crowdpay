@@ -9,6 +9,7 @@ export default function DepositModal({ onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [loadingLabel, setLoadingLabel] = useState('Submitting…');
   const [error, setError] = useState('');
+  const [kycRequired, setKycRequired] = useState(false);
   const [phase, setPhase] = useState('form');
   const [balance, setBalance] = useState(null);
   const popupRef = useRef(null);
@@ -55,9 +56,22 @@ export default function DepositModal({ onClose, onSuccess }) {
           return;
         }
         if (next.status === 'failed') {
-          setError(next.last_error || 'The deposit could not be completed.');
+          let customError = next.last_error || 'The deposit could not be completed.';
+          if (next.last_anchor_status === 'too_large')
+            customError = 'Deposit amount exceeds the maximum limit allowed by the partner.';
+          if (next.last_anchor_status === 'too_small')
+            customError = 'Deposit amount is below the minimum limit allowed by the partner.';
+          if (next.last_anchor_status === 'no_market')
+            customError = 'The deposit partner does not support this region or currency.';
+
+          setError(customError);
           setPhase('form');
           if (popupRef.current && !popupRef.current.closed) popupRef.current.close();
+        } else {
+          setKycRequired(
+            next.last_anchor_status === 'pending_user_info_update' ||
+              next.last_anchor_status === 'pending_customer_info_update'
+          );
         }
       } catch (err) {
         if (!stopped) setError(err.message || 'Could not refresh deposit status.');
@@ -254,6 +268,12 @@ export default function DepositModal({ onClose, onSuccess }) {
               Finish the hosted deposit flow in the popup window. CrowdPay is polling the anchor and
               will update your wallet balance automatically when the funds arrive.
             </p>
+            {kycRequired && (
+              <p className="alert alert--warning" style={{ marginBottom: '1rem' }} role="status">
+                <strong>Action Required:</strong> The partner needs additional KYC information.
+                Please complete the form in the deposit window.
+              </p>
+            )}
             {session?.anchor_transaction_id && (
               <p style={{ fontSize: '0.875rem', marginBottom: '0.75rem' }}>
                 <strong>Anchor transaction:</strong> {session.anchor_transaction_id}

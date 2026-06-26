@@ -66,7 +66,7 @@ describe('embed-widget script', () => {
     const handler = vi.fn();
     window.addEventListener('crowdpay:contribution', handler);
     window.dispatchEvent(
-      new MessageEvent('message', { data: { type: 'crowdpay:contribution', amount: '10' } }),
+      new MessageEvent('message', { data: { type: 'crowdpay:contribution', amount: '10' } })
     );
     expect(handler).toHaveBeenCalled();
     expect(handler.mock.calls[0][0].detail).toEqual({
@@ -80,9 +80,7 @@ describe('embed-widget script', () => {
     initCrowdPayEmbed(script);
     const iframe = document.querySelector('iframe');
     const popSpy = vi.spyOn(iframe.contentWindow, 'postMessage').mockImplementation(() => {});
-    window.dispatchEvent(
-      new CustomEvent('crowdpay:open', { detail: { campaignId: '7' } }),
-    );
+    window.dispatchEvent(new CustomEvent('crowdpay:open', { detail: { campaignId: '7' } }));
     expect(popSpy).toHaveBeenCalledWith({ type: 'open' }, '*');
   });
 });

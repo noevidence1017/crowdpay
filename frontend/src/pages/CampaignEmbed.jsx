@@ -86,7 +86,7 @@ export default function CampaignEmbed() {
   useEffect(() => {
     const handler = (event) => {
       if (event.data && event.data.type === 'open') {
-        // Handle open event if needed
+        // do nothing
       }
     };
     window.addEventListener('message', handler);

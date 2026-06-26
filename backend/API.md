@@ -4,6 +4,11 @@
 
 In development, browse the interactive API docs at `GET /api/docs`.
 
+## Important Notes
+
+### Timestamps
+All timestamps (like campaign deadlines) **must be in ISO 8601 format with a UTC timezone indicator (Z suffix)**, e.g., `2026-12-31T23:59:59.999Z`. The server will treat all timestamps as UTC for validation and storage.
+
 ## Contribution conversion model
 
 - Campaigns define a default settlement asset via `campaigns.asset_type` (`USDC` or `XLM`).

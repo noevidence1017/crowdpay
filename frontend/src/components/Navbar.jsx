@@ -45,6 +45,26 @@ export default function Navbar() {
     return () => document.removeEventListener('mousedown', handleOutside);
   }, [showDropdown]);
 
+  async function handleMarkRead(id) {
+    try {
+      await api.markNotificationRead(id);
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, read_at: new Date().toISOString() } : n))
+      );
+    } catch (_err) {
+      /* ignore */
+    }
+  }
+
+  async function handleMarkAllRead() {
+    try {
+      await api.markAllNotificationsRead();
+      setNotifications((prev) => prev.map((n) => ({ ...n, read_at: new Date().toISOString() })));
+    } catch (_err) {
+      /* ignore */
+    }
+  }
+
   function handleLogout() {
     logout();
     navigate('/');
