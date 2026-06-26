@@ -1,5 +1,3 @@
-process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5433/crowdpay';
-
 const { validateWalletSecretConfig } = require('../services/walletSecrets');
 
 const REQUIRED = [
