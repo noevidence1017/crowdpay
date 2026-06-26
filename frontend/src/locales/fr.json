@@ -330,8 +330,11 @@
     "error": "Impossible de démarrer la vérification d'identité."
   },
   "campaignStatus": {
-    "goalReached": "Objectif atteint",
-    "campaignEnded": "Campagne terminée",
-    "campaignClosed": "Campagne fermée"
+    "goalReached": "Goal reached",
+    "campaignEnded": "Campaign ended",
+    "campaignClosed": "Campaign closed"
+  },
+  "offline": {
+    "banner": "Vous êtes hors ligne — les modifications risquent de ne pas être enregistrées"
   }
 }

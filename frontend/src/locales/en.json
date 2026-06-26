@@ -333,5 +333,8 @@
     "goalReached": "Goal reached",
     "campaignEnded": "Campaign ended",
     "campaignClosed": "Campaign closed"
+  },
+  "offline": {
+    "banner": "You're offline — changes may not be saved"
   }
 }

@@ -20,6 +20,8 @@ import NotFound from './pages/NotFound';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './context/ToastContext';
+import { NetworkStatusProvider } from './context/NetworkStatusContext';
+import { OfflineBanner } from './components/OfflineBanner';
 
 export default function App() {
   const location = useLocation();
@@ -30,6 +32,8 @@ export default function App() {
     <ThemeProvider>
       <AuthProvider>
         <ToastProvider>
+          <NetworkStatusProvider>
+          <OfflineBanner />
           {!hideNavbar && <Navbar />}
           <Routes>
             <Route path="/" element={<Home />} />
@@ -52,6 +56,7 @@ export default function App() {
             />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </NetworkStatusProvider>
         </ToastProvider>
       </AuthProvider>
     </ThemeProvider>

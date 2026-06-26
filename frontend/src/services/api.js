@@ -1,6 +1,28 @@
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
 const BASE = `${API_BASE_URL}/api`;
 let refreshPromise = null;
+const retryQueue = [];
+
+const IDEMPOTENT_METHODS = new Set(['GET']);
+
+function isNetworkError(err) {
+  return err instanceof TypeError;
+}
+
+export function retryQueuedRequests() {
+  const queue = [...retryQueue];
+  retryQueue.length = 0;
+  for (const item of queue) {
+    const { method, path, body, options, resolve, reject } = item;
+    request(method, path, body, options).then(resolve).catch((err) => {
+      if (isNetworkError(err)) {
+        retryQueue.push(item);
+      } else {
+        reject(err);
+      }
+    });
+  }
+}
 
 const TIMEOUTS = {
   GET: 10_000, // 10 s
@@ -43,6 +65,14 @@ async function request(method, path, body, options = {}) {
   } catch (err) {
     if (err.name === 'AbortError') {
       throw new Error('Request timed out. Check your connection and try again.');
+    }
+    if (isNetworkError(err)) {
+      if (IDEMPOTENT_METHODS.has(method)) {
+        return new Promise((resolve, reject) => {
+          retryQueue.push({ method, path, body, options, resolve, reject });
+        });
+      }
+      throw new Error('You appear to be offline. Please check your connection and try again.');
     }
     throw err;
   } finally {
@@ -102,11 +132,19 @@ async function request(method, path, body, options = {}) {
 async function uploadFormData(path, formData) {
   const url = `${BASE}${path}`;
 
-  const res = await fetch(url, {
-    method: 'POST',
-    body: formData,
-    credentials: 'include',
-  });
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      body: formData,
+      credentials: 'include',
+    });
+  } catch (err) {
+    if (isNetworkError(err)) {
+      throw new Error('You appear to be offline. Please check your connection and try again.');
+    }
+    throw err;
+  }
 
   const text = await res.text();
   let data = {};
