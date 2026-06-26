@@ -220,6 +220,7 @@ export const api = {
   getCampaignEmbed: (id) => request('GET', `/campaigns/${id}/embed`),
   getCampaignBackers: (id) => request('GET', `/campaigns/${id}/backers`),
   getCampaignBalance: (id) => request('GET', `/campaigns/${id}/balance`),
+  getCloneData: (id) => request('GET', `/campaigns/${id}/clone-data`),
   createCampaign: (body) => request('POST', '/campaigns', body),
   updateCampaign: (id, body) => request('PATCH', `/campaigns/${id}`, body),
   deleteCampaign: (id) => request('DELETE', `/campaigns/${id}`),

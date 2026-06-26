@@ -62,7 +62,7 @@ export default function CreateCampaign() {
     deadline: '',
     min_contribution: location.state?.prefill?.min_contribution || '',
     max_contribution: location.state?.prefill?.max_contribution || '',
-    max_per_user: '',
+    max_per_user: location.state?.prefill?.max_per_user || '',
     show_backer_amounts: location.state?.prefill?.show_backer_amounts ?? true,
     milestones: [],
     max_per_user: '',

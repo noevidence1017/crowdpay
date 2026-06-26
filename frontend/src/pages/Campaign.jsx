@@ -415,7 +415,7 @@ export default function Campaign() {
 
   async function handleClone() {
     try {
-      const data = await api.getCloneData(id, token);
+      const data = await api.getCloneData(id);
       navigate('/campaigns/new', { state: { prefill: data } });
     } catch (err) {
       window.alert(err.message || 'Failed to fetch campaign clone data');

@@ -360,6 +360,53 @@ router.post('/:id/milestones', requireAuth, requireCampaignMember('owner'), asyn
   }
 }));
 
+router.get('/:id/clone-data', requireAuth, requireCampaignMember('owner'), asyncHandler(async (req, res) => {
+  const campaignId = req.params.id;
+
+  const { rows: campaignRows } = await db.query(
+    `SELECT title, description, target_amount, asset_type, category, min_contribution, max_contribution, max_per_user, show_backer_amounts
+     FROM campaigns 
+     WHERE id = $1`,
+    [campaignId]
+  );
+
+  if (!campaignRows.length) {
+    return res.status(404).json({ error: 'Campaign not found' });
+  }
+
+  const campaign = campaignRows[0];
+
+  const { rows: milestones } = await db.query(
+    `SELECT title, description, release_percentage
+     FROM milestones 
+     WHERE campaign_id = $1 
+     ORDER BY sort_order ASC`,
+    [campaignId]
+  );
+
+  const { rows: reward_tiers } = await db.query(
+    `SELECT title, description, min_amount, "limit", estimated_delivery
+     FROM reward_tiers 
+     WHERE campaign_id = $1
+     ORDER BY min_amount ASC`,
+    [campaignId]
+  );
+
+  res.json({
+    title: `Copy of ${campaign.title}`,
+    description: campaign.description,
+    target_amount: campaign.target_amount,
+    asset_type: campaign.asset_type,
+    category: campaign.category,
+    min_contribution: campaign.min_contribution,
+    max_contribution: campaign.max_contribution,
+    max_per_user: campaign.max_per_user,
+    show_backer_amounts: campaign.show_backer_amounts,
+    milestones: milestones,
+    reward_tiers: reward_tiers
+  });
+}));
+
 // Get single Campaign
 // Get featured campaigns
 router.get('/featured', asyncHandler(async (req, res) => {
