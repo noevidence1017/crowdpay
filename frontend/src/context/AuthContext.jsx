@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import * as Sentry from '@sentry/react';
 import { api } from '../services/api';
 
 const AuthContext = createContext(null);
@@ -43,6 +44,7 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (userData) => {
     setUser(userData);
+    Sentry.setUser({ id: userData.id, email: userData.email, role: userData.role });
     setReady(true);
   }, []);
 
@@ -53,6 +55,7 @@ export function AuthProvider({ children }) {
       /* ignore */
     }
     setUser(null);
+    Sentry.setUser(null);
     setReady(true);
   }, []);
 
